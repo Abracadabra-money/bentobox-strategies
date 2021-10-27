@@ -209,4 +209,9 @@ maybe("Ethereum UST DegenBox Strategy", async () => {
     // UST deposit hasn't arrived yet, bentobox is reporting a strategy loss
     expect(newBentoBalance.sub(oldBentoBalance)).to.eq(profits);
   });
+
+  it("should allow to update feeder", async() => {
+    await USTStrategy.updateExchangeRateFeeder("0xd96f48665a1410C0cd669A88898ecA36B9Fc2cce");
+    expect((await USTStrategy.feeder())).to.be.equal("0xd96f48665a1410C0cd669A88898ecA36B9Fc2cce");
+  })
 });
