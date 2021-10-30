@@ -13,8 +13,7 @@ const deployFunction: DeployFunction = async function (
   await deploy("USTStrategy", {
     from: deployer,
     args: [
-      deployer,
-      ethers.constants.HashZero
+      deployer
     ],
     log: true,
     deterministicDeployment: false,
