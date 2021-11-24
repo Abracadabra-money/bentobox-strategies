@@ -28,8 +28,8 @@ describe("Cake DegenBox Strategy", async () => {
         {
           forking: {
             enabled: true,
-            jsonRpcUrl: ``,
-            blockNumber: 12763953,
+            jsonRpcUrl: process.env.BSC_RPC_URL,
+            blockNumber: 12822488,
           },
         },
       ],

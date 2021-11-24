@@ -1,7 +1,7 @@
 import { HardhatRuntimeEnvironment } from "hardhat/types";
 import { DeployFunction } from "hardhat-deploy/types";
 import { network, ethers } from "hardhat";
-import { XJOEStrategy } from "../typechain";
+import { CakeStrategy, XJOEStrategy } from "../typechain";
 
 const deployFunction: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
   const { deployments, getNamedAccounts } = hre;
@@ -15,7 +15,6 @@ const deployFunction: DeployFunction = async function (hre: HardhatRuntimeEnviro
   const bridgeToken = ethers.constants.AddressZero;
   const xMerlin = "0xfddfE525054efaAD204600d00CA86ADb1Cc2ea8a"; // 0xMerlin.eth
   const masterChef = "0x73feaa1eE314F8c655E354234017bE2193C9E24E"; // Cake MasterChef
-  const router = "0x10ED43C718714eb63d5aA57B78B54704E256024E"; // Pancake Router
   const pairHashCode = "0x00fb7f630766e6a796048ea87d01acd3068e8ff67d078148a3fa3f4a84f69bd5"; // pair hash code for Pancake
 
   await deploy("CakeStrategy", {
@@ -27,7 +26,6 @@ const deployFunction: DeployFunction = async function (hre: HardhatRuntimeEnviro
       bridgeToken,
       network.name === "hardhat" ? deployer : xMerlin,
       masterChef,
-      router,
       pairHashCode,
     ],
     log: true,
@@ -37,7 +35,7 @@ const deployFunction: DeployFunction = async function (hre: HardhatRuntimeEnviro
 
   if (network.name !== "hardhat") {
     const CakeStrategy = await ethers.getContract<CakeStrategy>("CakeStrategy");
-    await CakeStrategy.setFeeCollector(xMerlin); // Temporary until changed to correct feeCollector
+    await CakeStrategy.setFeeCollector(xMerlin);
     await CakeStrategy.transferOwnership(xMerlin);
   }
 };
