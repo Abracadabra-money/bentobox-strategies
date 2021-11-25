@@ -35,8 +35,12 @@ const deployFunction: DeployFunction = async function (hre: HardhatRuntimeEnviro
 
   if (network.name !== "hardhat") {
     const CakeStrategy = await ethers.getContract<CakeStrategy>("CakeStrategy");
-    await CakeStrategy.setFeeCollector(xMerlin);
-    await CakeStrategy.transferOwnership(xMerlin);
+    if ((await CakeStrategy.feeCollector()) != xMerlin) {
+      await CakeStrategy.setFeeCollector(xMerlin);
+    }
+    if ((await CakeStrategy.owner()) != xMerlin) {
+      await CakeStrategy.transferOwnership(xMerlin); 
+    }
   }
 };
 
