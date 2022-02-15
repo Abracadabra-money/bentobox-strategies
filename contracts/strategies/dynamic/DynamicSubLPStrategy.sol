@@ -6,20 +6,20 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "../../BaseStrategy.sol";
 import "../../interfaces/ISushiSwap.sol";
 import "../../interfaces/IMasterChef.sol";
-import "../../interfaces/ISubDynamicStrategy.sol";
+import "../../interfaces/IDynamicSubLPStrategy.sol";
 import "../../libraries/Babylonian.sol";
 
 /// @notice DynamicLPStrategy sub-strategy.
 /// @dev For gas saving, the strategy directly transfers to bentobox instead
 /// of transfering to DynamicLPStrategy.
-contract DynamicSubLPStrategy is ISubDynamicStrategy {
+contract DynamicSubLPStrategy is IDynamicSubLPStrategy {
     using SafeERC20 for IERC20;
 
     event LpMinted(uint256 total, uint256 strategyAmount, uint256 feeAmount);
 
     address public immutable bentoBox;
     uint256 public immutable pid;
-    address public immutable strategyToken;
+    address public override immutable strategyToken;
     address public immutable factory;
     ISushiSwap public immutable router;
     IMasterChef public immutable masterchef;
@@ -50,20 +50,22 @@ contract DynamicSubLPStrategy is ISubDynamicStrategy {
         uint256 _pid,
         ISushiSwap _router,
         address _rewardToken,
-        bool _usePairToken0,
-        bytes32 _pairCodeHash
+        bytes32 _pairCodeHash,
+        bool _usePairToken0
     ) {
         bentoBox = _bentoBox;
+        dynamicStrategy = _dynamicStrategy;
+        strategyToken = _strategyToken;
+        factory = _factory;
         masterchef = _masterchef;
         pid = _pid;
         router = _router;
-        strategyToken = _strategyToken;
-        factory = _factory;
         rewardToken = _rewardToken;
-        dynamicStrategy = _dynamicStrategy;
         pairCodeHash = _pairCodeHash;
 
-        (address token0, address token1) = _getPairTokens(address(_strategyToken));
+        address token0 = ISushiSwap(_strategyToken).token0();
+        address token1 = ISushiSwap(_strategyToken).token1();
+
         IERC20(token0).safeApprove(address(_router), type(uint256).max);
         IERC20(token1).safeApprove(address(_router), type(uint256).max);
         IERC20(_strategyToken).safeApprove(address(_masterchef), type(uint256).max);
@@ -85,22 +87,21 @@ contract DynamicSubLPStrategy is ISubDynamicStrategy {
         masterchef.withdraw(pid, 0);
 
         amountAdded = IERC20(strategyToken).balanceOf(address(this));
-
-        if (amountAdded > 0) {
-            IERC20(strategyToken).transfer(bentoBox, amountAdded);
-        }
+        IERC20(strategyToken).safeTransfer(bentoBox, amountAdded);
     }
 
     function withdraw(uint256 amount) external override onlyDynamicStrategy returns (uint256 actualAmount) {
         masterchef.withdraw(pid, amount);
 
         actualAmount = IERC20(strategyToken).balanceOf(address(this));
-        IERC20(strategyToken).safeTransfer(dynamicStrategy, actualAmount);
+        IERC20(strategyToken).safeTransfer(bentoBox, actualAmount);
     }
 
-    function exit() external override onlyDynamicStrategy returns (uint256 amountAdded) {
+    function exit() external override onlyDynamicStrategy returns (uint256 actualAmount) {
         masterchef.emergencyWithdraw(pid);
-        IERC20(strategyToken).transfer(dynamicStrategy, IERC20(strategyToken).balanceOf(address(this)));
+        
+        actualAmount = IERC20(strategyToken).balanceOf(address(this));
+        IERC20(strategyToken).safeTransfer(bentoBox, actualAmount);
     }
 
     /// @notice Swap some tokens in the contract for the underlying and deposits them to address(this)
@@ -111,7 +112,7 @@ contract DynamicSubLPStrategy is ISubDynamicStrategy {
     ) public onlyDynamicStrategy returns (uint256 amountOut) {
         uint256 tokenInAmount = _swapTokens(rewardToken, pairInputToken);
         (uint256 reserve0, uint256 reserve1, ) = ISushiSwap(strategyToken).getReserves();
-        (address token0, address token1) = _getPairTokens(strategyToken);
+        (address token0, address token1) = getPairTokens();
 
         // The pairInputToken amount to swap to get the equivalent pair second token amount
         uint256 swapAmountIn = _calculateSwapInAmount(usePairToken0 ? reserve0 : reserve1, tokenInAmount);
@@ -155,8 +156,16 @@ contract DynamicSubLPStrategy is ISubDynamicStrategy {
         emit LpMinted(total, amountOut, feeAmount);
     }
 
-    function _getPairTokens(address _pairAddress) private pure returns (address token0, address token1) {
-        ISushiSwap sushiPair = ISushiSwap(_pairAddress);
+    function wrap() override external {
+        // TODO: implement
+    }
+
+    function unwrap(IDynamicSubLPStrategy recipient) override external {
+        // TODO: implement
+    }
+
+    function getPairTokens() public override view returns (address token0, address token1) {
+        ISushiSwap sushiPair = ISushiSwap(strategyToken);
         token0 = sushiPair.token0();
         token1 = sushiPair.token1();
     }

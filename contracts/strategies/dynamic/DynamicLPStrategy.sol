@@ -8,16 +8,19 @@ import "../../libraries/Babylonian.sol";
 import "../../interfaces/IStrategy.sol";
 import "../../interfaces/ISushiSwap.sol";
 import "../../interfaces/IMasterChef.sol";
-import "../../interfaces/ISubDynamicStrategy.sol";
+import "../../interfaces/IDynamicSubLPStrategy.sol";
 import "../../interfaces/IBentoBoxMinimal.sol";
 
 /// @notice Dynamic strategy that can have different farming strategy
-/// For example, farming on Trader Joe then unwrap the jLP to 
+/// For example, farming on Trader Joe then unwrap the jLP to
 /// mint pLP and farm on Pengolin.
-contract DynamicLPStrategy is IStrategy, Ownable  {
+contract DynamicLPStrategy is IStrategy, Ownable {
     using SafeERC20 for IERC20;
 
     address public immutable strategyToken;
+    address public immutable token0;
+    address public immutable token1;
+
     address public immutable bentoBox;
 
     address public feeCollector;
@@ -25,31 +28,28 @@ contract DynamicLPStrategy is IStrategy, Ownable  {
 
     uint256 public maxBentoBoxBalance; /// @dev Slippage protection when calling harvest
     mapping(address => bool) public strategyExecutors; /// @dev EOAs that can execute safeHarvest
-    mapping(ISubDynamicStrategy => bool) public enabledSubStrategies;
 
-    ISubDynamicStrategy public immutable defaultSubStrategy;
-    ISubDynamicStrategy public currentSubStrategy;
+    IDynamicSubLPStrategy[] public subStrategies;
+    IDynamicSubLPStrategy public currentSubStrategy;
 
     bool public exited; /// @dev After bentobox 'exits' the strategy harvest, skim and withdraw functions can no loner be called
 
-    event LogSubStrategyEnabled(address indexed subStrategy, bool enabled);
+    event LogSubStrategyAdded(address indexed subStrategy);
     event LogSetStrategyExecutor(address indexed executor, bool allowed);
 
     /** @param _strategyToken Address of the underlying LP token the strategy invests.
         @param _bentoBox BentoBox address.
         @param _strategyExecutor an EOA that will execute the safeHarvest function.
-        @param _defaultSubStrategy the default sub strategy, must be handling _strategyToken token. It should not be
-        converting the _strategyToken to any underlying so that the skim, withdraw and exit work seamlessly without
-        converting the sub strategy to  _strategyToken.
     */
     constructor(
         address _strategyToken,
         address _bentoBox,
-        address _strategyExecutor,
-        ISubDynamicStrategy _defaultSubStrategy
+        address _strategyExecutor
     ) {
-        defaultSubStrategy = _defaultSubStrategy;
         strategyToken = _strategyToken;
+        token0 = ISushiSwap(_strategyToken).token0();
+        token1 = ISushiSwap(_strategyToken).token1();
+        
         bentoBox = _bentoBox;
 
         if (_strategyExecutor != address(0)) {
@@ -68,8 +68,11 @@ contract DynamicLPStrategy is IStrategy, Ownable  {
         _;
     }
 
-    modifier onlyDefaultStrategy() {
-        require(currentSubStrategy == defaultSubStrategy, "not default strategy");
+    /// @notice Ensure the current strategy is handling _strategyToken token so that skim, withdraw and exit can
+    /// can report correctly back to bentobox. Also make sure the strategy is enabled.
+    modifier onValidStrategy() {
+        require(address(currentSubStrategy) != address(0), "zero address");
+        require(currentSubStrategy.strategyToken() == strategyToken, "not handling strategyToken");
         _;
     }
 
@@ -78,39 +81,40 @@ contract DynamicLPStrategy is IStrategy, Ownable  {
         _;
     }
 
-    function setStrategyEnabled(ISubDynamicStrategy subStrategy, bool enabled) public onlyOwner {
-        //require(subStrategy.tokenIn == strategyToken, "tokenIn is not strategyToken");
+    function addSubStrategy(IDynamicSubLPStrategy subStrategy) public onlyOwner {
         require(address(subStrategy) != address(0), "zero address");
-        require(subStrategy != defaultSubStrategy || enabled, "cannot disable default strategy");
 
-        enabledSubStrategies[subStrategy] = enabled;
-        emit LogSubStrategyEnabled(address(subStrategy), enabled);
+        (address _token0, address _token1) = subStrategy.getPairTokens();
+        require(_token0 == token0 && _token1 == token1, "not compatible");
+        
+        subStrategies.push(subStrategy);
+        emit LogSubStrategyAdded(address(subStrategy));
     }
 
-    function setCurrentStrategy(ISubDynamicStrategy subStrategy) public onlyOwner {
-        require(enabledSubStrategies[subStrategy], "not enabled");
-        require(currentSubStrategy != subStrategy, "already current");
+    // TODO: add parameters for chainlink price verification and delta reserve treshold
+    function setCurrentStrategy(uint256 index) public onlyOwner {
+        require(index < subStrategies.length, "invalid index");
 
-        ISubDynamicStrategy previousSubStrategy = currentSubStrategy;
-        currentSubStrategy = subStrategy;
+        IDynamicSubLPStrategy previousSubStrategy = currentSubStrategy;
+        currentSubStrategy = subStrategies[index];
+        require(previousSubStrategy != currentSubStrategy, "already current");
+
+        /// @dev the next sub strategy is not using the same strategy token
+        /// and requires a convertion
+        if (previousSubStrategy.strategyToken() != currentSubStrategy.strategyToken()) {
+            // TODO: unwrap and re-wrap
+        }
     }
 
-    // TODO: SUPPORT INPUT TRADER JOE jLP when strat is not the default one!
-     /// @inheritdoc IStrategy
-    function skim(uint256 amount) external onlyDefaultStrategy override {
-        defaultSubStrategy.skim(amount);
-    }
-
-    // TODO: SUPPORT INPUT TRADER JOE jLP when strat is not the default one!
     /// @inheritdoc IStrategy
-    function withdraw(uint256 amount) external override isActive onlyBentoBox onlyDefaultStrategy returns (uint256 actualAmount) {
-        defaultSubStrategy.withdraw(amount);
-
-        /// @dev Make sure we send and report the exact same amount of tokens by using balanceOf.
-        actualAmount = IERC20(strategyToken).balanceOf(address(this));
-        IERC20(strategyToken).safeTransfer(bentoBox, actualAmount);
+    function skim(uint256 amount) external override onValidStrategy {
+        currentSubStrategy.skim(amount);
     }
 
+    /// @inheritdoc IStrategy
+    function withdraw(uint256 amount) external override isActive onlyBentoBox onValidStrategy returns (uint256 actualAmount) {
+        return currentSubStrategy.withdraw(amount);
+    }
 
     /// @notice Harvest profits while preventing a sandwich attack exploit.
     /// @param maxBalance The maximum balance of the underlying token that is allowed to be in BentoBox.
@@ -123,8 +127,6 @@ contract DynamicLPStrategy is IStrategy, Ownable  {
         bool rebalance,
         uint256 maxChangeAmount
     ) external onlyExecutor {
-        require(!rebalance || currentSubStrategy == defaultSubStrategy, "not default strategy");
-
         if (maxBalance > 0) {
             maxBentoBoxBalance = maxBalance;
         }
@@ -143,21 +145,17 @@ contract DynamicLPStrategy is IStrategy, Ownable  {
         if (sender == address(this) && IBentoBoxMinimal(bentoBox).totals(strategyToken).elastic <= maxBentoBoxBalance && balance > 0) {
             return int256(currentSubStrategy.harvest());
         }
- 
+
         return int256(0);
     }
 
     /// @inheritdoc IStrategy
     /// @dev do not use isActive modifier here; allow bentobox to call strategy.exit() multiple times
-    function exit(uint256 balance) external override onlyBentoBox onlyDefaultStrategy returns (int256 amountAdded) {
-        defaultSubStrategy.exit();
+    function exit(uint256 balance) external override onlyBentoBox onValidStrategy returns (int256 amountAdded) {
+        uint256 actualBalance = currentSubStrategy.exit();
 
-        uint256 actualBalance = IERC20(strategyToken).balanceOf(address(this));
         /// @dev Calculate tokens added (or lost).
         amountAdded = int256(actualBalance) - int256(balance);
-        /// @dev Transfer all tokens to bentoBox.
-        IERC20(strategyToken).safeTransfer(bentoBox, actualBalance);
-        /// @dev Flag as exited, allowing the owner to manually deal with any amounts available later.
         exited = true;
     }
 
