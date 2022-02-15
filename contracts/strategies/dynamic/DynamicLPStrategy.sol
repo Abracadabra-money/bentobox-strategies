@@ -49,7 +49,7 @@ contract DynamicLPStrategy is IStrategy, Ownable {
         strategyToken = _strategyToken;
         token0 = ISushiSwap(_strategyToken).token0();
         token1 = ISushiSwap(_strategyToken).token1();
-        
+
         bentoBox = _bentoBox;
 
         if (_strategyExecutor != address(0)) {
@@ -70,7 +70,7 @@ contract DynamicLPStrategy is IStrategy, Ownable {
 
     /// @notice Ensure the current strategy is handling _strategyToken token so that skim, withdraw and exit can
     /// can report correctly back to bentobox. Also make sure the strategy is enabled.
-    modifier onValidStrategy() {
+    modifier onlyValidStrategy() {
         require(address(currentSubStrategy) != address(0), "zero address");
         require(currentSubStrategy.strategyToken() == strategyToken, "not handling strategyToken");
         _;
@@ -86,13 +86,18 @@ contract DynamicLPStrategy is IStrategy, Ownable {
 
         (address _token0, address _token1) = subStrategy.getPairTokens();
         require(_token0 == token0 && _token1 == token1, "not compatible");
-        
+
         subStrategies.push(subStrategy);
         emit LogSubStrategyAdded(address(subStrategy));
     }
 
     // TODO: add parameters for chainlink price verification and delta reserve treshold
-    function setCurrentStrategy(uint256 index) public onlyOwner {
+    /// @param index the index of the next strategy to use
+    /// @param maximumBps maximum tolerated amount of basis points of the total migrated
+    /// liquidated value in usd from switching from strategy A to B.
+    /// 5 = 0.05%
+    /// 10_000 = 100%
+    function setCurrentStrategy(uint256 index, uint256 maximumBps) public onlyOwner {
         require(index < subStrategies.length, "invalid index");
 
         IDynamicSubLPStrategy previousSubStrategy = currentSubStrategy;
@@ -102,17 +107,28 @@ contract DynamicLPStrategy is IStrategy, Ownable {
         /// @dev the next sub strategy is not using the same strategy token
         /// and requires a convertion
         if (previousSubStrategy.strategyToken() != currentSubStrategy.strategyToken()) {
-            // TODO: unwrap and re-wrap
+            /// @dev unwrap needs send the token0 and token1 to the next strategy directly
+            uint256 amountFrom = previousSubStrategy.withdrawAndUnwrapTo(currentSubStrategy);
+
+            /// @dev wrap from the tokens sent from the previous strategy
+            uint256 amountTo = currentSubStrategy.wrapAndDeposit();
+
+            /// @dev oracle peekSpot needs to send the inverse price in USD
+            uint256 priceAmountFrom = (amountFrom * 1e36) / previousSubStrategy.oracle().peekSpot("");
+            uint256 priceAmountTo = (amountTo * 1e36) / currentSubStrategy.oracle().peekSpot("");
+            uint256 minToteraledPrice = priceAmountFrom - ((priceAmountFrom * maximumBps) / 10_000);
+
+            require(priceAmountTo >= minToteraledPrice, "maximumBps exceeded");
         }
     }
 
     /// @inheritdoc IStrategy
-    function skim(uint256 amount) external override onValidStrategy {
+    function skim(uint256 amount) external override onlyValidStrategy {
         currentSubStrategy.skim(amount);
     }
 
     /// @inheritdoc IStrategy
-    function withdraw(uint256 amount) external override isActive onlyBentoBox onValidStrategy returns (uint256 actualAmount) {
+    function withdraw(uint256 amount) external override isActive onlyBentoBox onlyValidStrategy returns (uint256 actualAmount) {
         return currentSubStrategy.withdraw(amount);
     }
 
@@ -151,12 +167,16 @@ contract DynamicLPStrategy is IStrategy, Ownable {
 
     /// @inheritdoc IStrategy
     /// @dev do not use isActive modifier here; allow bentobox to call strategy.exit() multiple times
-    function exit(uint256 balance) external override onlyBentoBox onValidStrategy returns (int256 amountAdded) {
+    function exit(uint256 balance) external override onlyBentoBox onlyValidStrategy returns (int256 amountAdded) {
         uint256 actualBalance = currentSubStrategy.exit();
 
         /// @dev Calculate tokens added (or lost).
         amountAdded = int256(actualBalance) - int256(balance);
         exited = true;
+    }
+
+    function swapToLP(uint256 amountOutMin) external onlyExecutor returns (uint256) {
+        return currentSubStrategy.swapToLP(amountOutMin, feePercent, feeCollector);
     }
 
     function setStrategyExecutor(address executor, bool value) external onlyOwner {

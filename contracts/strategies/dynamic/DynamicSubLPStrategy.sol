@@ -7,6 +7,7 @@ import "../../BaseStrategy.sol";
 import "../../interfaces/ISushiSwap.sol";
 import "../../interfaces/IMasterChef.sol";
 import "../../interfaces/IDynamicSubLPStrategy.sol";
+import "../../interfaces/IOracle.sol";
 import "../../libraries/Babylonian.sol";
 
 /// @notice DynamicLPStrategy sub-strategy.
@@ -17,9 +18,11 @@ contract DynamicSubLPStrategy is IDynamicSubLPStrategy {
 
     event LpMinted(uint256 total, uint256 strategyAmount, uint256 feeAmount);
 
+    address public override immutable strategyToken;
+    IOracle public override immutable oracle;
+
     address public immutable bentoBox;
     uint256 public immutable pid;
-    address public override immutable strategyToken;
     address public immutable factory;
     ISushiSwap public immutable router;
     IMasterChef public immutable masterchef;
@@ -46,6 +49,7 @@ contract DynamicSubLPStrategy is IDynamicSubLPStrategy {
         address _dynamicStrategy,
         address _strategyToken,
         address _factory,
+        IOracle _oracle,
         IMasterChef _masterchef,
         uint256 _pid,
         ISushiSwap _router,
@@ -57,6 +61,7 @@ contract DynamicSubLPStrategy is IDynamicSubLPStrategy {
         dynamicStrategy = _dynamicStrategy;
         strategyToken = _strategyToken;
         factory = _factory;
+        oracle = _oracle;
         masterchef = _masterchef;
         pid = _pid;
         router = _router;
@@ -109,7 +114,7 @@ contract DynamicSubLPStrategy is IDynamicSubLPStrategy {
         uint256 amountOutMin,
         uint256 feePercent,
         address feeTo
-    ) public onlyDynamicStrategy returns (uint256 amountOut) {
+    ) public override onlyDynamicStrategy returns (uint256 amountOut) {
         uint256 tokenInAmount = _swapTokens(rewardToken, pairInputToken);
         (uint256 reserve0, uint256 reserve1, ) = ISushiSwap(strategyToken).getReserves();
         (address token0, address token1) = getPairTokens();
@@ -156,12 +161,19 @@ contract DynamicSubLPStrategy is IDynamicSubLPStrategy {
         emit LpMinted(total, amountOut, feeAmount);
     }
 
-    function wrap() override external {
-        // TODO: implement
+    function wrapAndDeposit() override external returns(uint256 amount) {
+        // TODO:
+        // wrap from token0 and token1 balance already in this contract
+        // deposit in masterchef
+        // return amount lp minted
     }
 
-    function unwrap(IDynamicSubLPStrategy recipient) override external {
-        // TODO: implement
+    function withdrawAndUnwrapTo(IDynamicSubLPStrategy recipient) override external returns(uint256 amount) {
+        // TODO:
+        // unstake all from masterchef
+        // burn lp
+        // transfer token0 and token1 to recipient
+        // return amount lp burned
     }
 
     function getPairTokens() public override view returns (address token0, address token1) {
