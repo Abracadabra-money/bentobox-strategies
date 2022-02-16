@@ -35,6 +35,14 @@ contract DynamicLPStrategy is IStrategy, Ownable {
     bool public exited; /// @dev After bentobox 'exits' the strategy harvest, skim and withdraw functions can no loner be called
 
     event LogSubStrategyAdded(address indexed subStrategy);
+    event LogSubStrategyChanged(
+        address indexed fromStrategy,
+        address indexed toStrategy,
+        uint256 amountOut,
+        uint256 amountOutPrice,
+        uint256 amountIn,
+        uint256 amountInPrice
+    );
     event LogSetStrategyExecutor(address indexed executor, bool allowed);
 
     /** @param _strategyToken Address of the underlying LP token the strategy invests.
@@ -68,11 +76,11 @@ contract DynamicLPStrategy is IStrategy, Ownable {
         _;
     }
 
-    /// @notice Ensure the current strategy is handling _strategyToken token so that skim, withdraw and exit can
-    /// can report correctly back to bentobox. Also make sure the strategy is enabled.
+    /// @notice Ensure the current strategy is handling _strategyToken token so that skim,
+    /// withdraw and exit can report correctly back to bentobox.
     modifier onlyValidStrategy() {
         require(address(currentSubStrategy) != address(0), "zero address");
-        require(currentSubStrategy.strategyToken() == strategyToken, "not handling strategyToken");
+        require(currentSubStrategy.strategyTokenIn() == strategyToken, "not handling strategyToken");
         _;
     }
 
@@ -84,8 +92,9 @@ contract DynamicLPStrategy is IStrategy, Ownable {
     function addSubStrategy(IDynamicSubLPStrategy subStrategy) public onlyOwner {
         require(address(subStrategy) != address(0), "zero address");
 
-        (address _token0, address _token1) = subStrategy.getPairTokens();
-        require(_token0 == token0 && _token1 == token1, "not compatible");
+        /// @dev make sure the strategy pair token is using the same token0 and token1
+        ISushiSwap sushiPair = ISushiSwap(subStrategy.strategyTokenIn());
+        require(sushiPair.token0() == token0 && sushiPair.token1() == token1, "not compatible");
 
         subStrategies.push(subStrategy);
         emit LogSubStrategyAdded(address(subStrategy));
@@ -94,10 +103,13 @@ contract DynamicLPStrategy is IStrategy, Ownable {
     // TODO: add parameters for chainlink price verification and delta reserve treshold
     /// @param index the index of the next strategy to use
     /// @param maximumBps maximum tolerated amount of basis points of the total migrated
-    /// liquidated value in usd from switching from strategy A to B.
-    /// 5 = 0.05%
-    /// 10_000 = 100%
-    function setCurrentStrategy(uint256 index, uint256 maximumBps) public onlyOwner {
+    ///                   5 = 0.05%
+    ///                   10_000 = 100%
+    /// @param minDustAmount when the new strategy needs to wrap the token0 and token1 from previousSubStrategy
+    ///                     unwrapped token0 and token1, after initial addLiquidity, what minimum remaining
+    ///                     amount left in the contract (from new pair imbalance),
+    ///                     should be considered to swap again for more liquidity. Set to 0 to ignore.
+    function setCurrentStrategy(uint256 index, uint256 maximumBps, uint256 minDustAmount) public onlyOwner {
         require(index < subStrategies.length, "invalid index");
 
         IDynamicSubLPStrategy previousSubStrategy = currentSubStrategy;
@@ -106,19 +118,25 @@ contract DynamicLPStrategy is IStrategy, Ownable {
 
         /// @dev the next sub strategy is not using the same strategy token
         /// and requires a convertion
-        if (previousSubStrategy.strategyToken() != currentSubStrategy.strategyToken()) {
+        if (previousSubStrategy.strategyTokenIn() != currentSubStrategy.strategyTokenIn()) {
             /// @dev unwrap needs send the token0 and token1 to the next strategy directly
-            uint256 amountFrom = previousSubStrategy.withdrawAndUnwrapTo(currentSubStrategy);
+            (uint256 amountFrom, uint256 priceAmountFrom) = previousSubStrategy.withdrawAndUnwrapTo(currentSubStrategy);
 
             /// @dev wrap from the tokens sent from the previous strategy
-            uint256 amountTo = currentSubStrategy.wrapAndDeposit();
+            (uint256 amountTo, uint256 priceAmountTo) = currentSubStrategy.wrapAndDeposit(minDustAmount);
 
-            /// @dev oracle peekSpot needs to send the inverse price in USD
-            uint256 priceAmountFrom = (amountFrom * 1e36) / previousSubStrategy.oracle().peekSpot("");
-            uint256 priceAmountTo = (amountTo * 1e36) / currentSubStrategy.oracle().peekSpot("");
             uint256 minToteraledPrice = priceAmountFrom - ((priceAmountFrom * maximumBps) / 10_000);
 
             require(priceAmountTo >= minToteraledPrice, "maximumBps exceeded");
+
+            emit LogSubStrategyChanged(
+                address(previousSubStrategy),
+                address(currentSubStrategy),
+                amountFrom,
+                priceAmountFrom,
+                amountTo,
+                priceAmountTo
+            );
         }
     }
 

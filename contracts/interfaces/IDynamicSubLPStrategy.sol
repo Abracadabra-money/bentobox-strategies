@@ -13,15 +13,13 @@ interface IDynamicSubLPStrategy {
 
     function exit() external returns (uint256 actualAmount);
 
-    function getPairTokens() external view returns (address token0, address token1);
+    function strategyTokenIn() external view returns (address);
 
-    function strategyToken() external view returns (address);
+    function strategyTokenOut() external view returns (address);
 
-    function oracle() external view returns (IOracle);
+    function wrapAndDeposit(uint256 minDustAmount) external returns (uint256 amount, uint256 amountPrice);
 
-    function wrapAndDeposit() external returns (uint256 amount);
-
-    function withdrawAndUnwrapTo(IDynamicSubLPStrategy recipient) external returns (uint256 amount);
+    function withdrawAndUnwrapTo(IDynamicSubLPStrategy recipient) external returns (uint256 amount, uint256 amountPrice);
 
     function swapToLP(
         uint256 amountOutMin,
