@@ -7,7 +7,6 @@ import "@rari-capital/solmate/src/utils/SafeTransferLib.sol";
 import "@rari-capital/solmate/src/tokens/ERC20.sol";
 import "../interfaces/IStrategy.sol";
 import "../interfaces/IBentoBoxMinimal.sol";
-import "hardhat/console.sol";
 
 interface IExchangeRateFeeder {
     function exchangeRateOf(address _token, bool _simulate) external view returns (uint256);
