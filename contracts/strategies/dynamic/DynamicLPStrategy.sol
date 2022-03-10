@@ -100,16 +100,16 @@ contract DynamicLPStrategy is IStrategy, Ownable {
         emit LogSubStrategyAdded(address(subStrategy));
     }
 
-    // TODO: add parameters for chainlink price verification and delta reserve treshold
     /// @param index the index of the next strategy to use
     /// @param maximumBps maximum tolerated amount of basis points of the total migrated
     ///                   5 = 0.05%
     ///                   10_000 = 100%
-    /// @param minDustAmount when the new strategy needs to wrap the token0 and token1 from previousSubStrategy
+    /// @param minDustAmount0 when the new strategy needs to wrap the token0 and token1 from previousSubStrategy
     ///                     unwrapped token0 and token1, after initial addLiquidity, what minimum remaining
     ///                     amount left in the contract (from new pair imbalance),
     ///                     should be considered to swap again for more liquidity. Set to 0 to ignore.
-    function setCurrentStrategy(uint256 index, uint256 maximumBps, uint256 minDustAmount) public onlyOwner {
+    /// @param minDustAmount1 same as minDustAmount0 but for token1
+    function setCurrentStrategy(uint256 index, uint256 maximumBps, uint256 minDustAmount0, uint256 minDustAmount1) public onlyOwner {
         require(index < subStrategies.length, "invalid index");
 
         IDynamicSubLPStrategy previousSubStrategy = currentSubStrategy;
@@ -123,7 +123,7 @@ contract DynamicLPStrategy is IStrategy, Ownable {
             (uint256 amountFrom, uint256 priceAmountFrom) = previousSubStrategy.withdrawAndUnwrapTo(currentSubStrategy);
 
             /// @dev wrap from the tokens sent from the previous strategy
-            (uint256 amountTo, uint256 priceAmountTo) = currentSubStrategy.wrapAndDeposit(minDustAmount);
+            (uint256 amountTo, uint256 priceAmountTo) = currentSubStrategy.wrapAndDeposit(minDustAmount0, minDustAmount1);
 
             uint256 minToteraledPrice = priceAmountFrom - ((priceAmountFrom * maximumBps) / 10_000);
 
@@ -203,6 +203,7 @@ contract DynamicLPStrategy is IStrategy, Ownable {
     }
 
     function setFeeParameters(address _feeCollector, uint8 _feePercent) external onlyOwner {
+        require(feePercent <= 100, "invalid feePercent");
         feeCollector = _feeCollector;
         feePercent = _feePercent;
     }

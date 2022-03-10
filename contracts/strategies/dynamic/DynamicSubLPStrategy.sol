@@ -11,7 +11,7 @@ import "../../interfaces/IDynamicSubLPStrategy.sol";
 import "../../interfaces/IOracle.sol";
 import "../../libraries/Babylonian.sol";
 
-/// @notice DynamicLPStrategy sub-strategy.
+/// @notice DynamicLPStrategy sub-strategy for uniswap-forks with 0.3% fees
 /// @dev For gas saving, the strategy directly transfers to bentobox instead
 /// of transfering to DynamicLPStrategy.
 contract DynamicSubLPStrategy is IDynamicSubLPStrategy, Ownable {
@@ -36,7 +36,7 @@ contract DynamicSubLPStrategy is IDynamicSubLPStrategy, Ownable {
 
     /// @notice When true, the _rewardToken will be swapped to the pair's
     /// token0 for one-sided liquidity providing, otherwise, the pair's token1.
-    bool usePairToken0;
+    bool public usePairToken0;
 
     /// @notice cache of the strategyTokenOut token used to first swap the token rewards to before
     /// splitting the liquidity in half for minting strategyTokenIn
@@ -54,7 +54,7 @@ contract DynamicSubLPStrategy is IDynamicSubLPStrategy, Ownable {
         @param _bentoBox BentoBox address.
         @param _dynamicStrategy The dynamic strategy this sub strategy belongs to
         @param _strategyTokenIn Address of the LP token the strategy is farming with
-        @param _strategyTokenOut Address of the LP token the strategy is swapping to rewardTokens to
+        @param _strategyTokenOut Address of the LP token the strategy is swapping the rewardTokens to
         @param _oracle The oracle to price the strategyTokenOut. peekSpot needs to send the inverse price in USD
         @param _masterchef The masterchef contract for staking
         @param _rewardToken The token the staking is farming
@@ -107,7 +107,7 @@ contract DynamicSubLPStrategy is IDynamicSubLPStrategy, Ownable {
     }
 
     modifier onlyDynamicStrategy() {
-        require(dynamicStrategy == msg.sender, "invalid sender");
+        require(msg.sender == dynamicStrategy, "invalid sender");
         _;
     }
 
@@ -202,17 +202,26 @@ contract DynamicSubLPStrategy is IDynamicSubLPStrategy, Ownable {
         require(total >= amountOutMin, "INSUFFICIENT_AMOUNT_OUT");
 
         uint256 feeAmount = (total * feePercent) / 100;
-        amountOut = total - feeAmount;
 
-        IERC20(strategyTokenOut).safeTransfer(feeTo, feeAmount);
+        if (feeAmount > 0) {
+            amountOut = total - feeAmount;
+            IERC20(strategyTokenOut).safeTransfer(feeTo, feeAmount);
+        }
+
         emit LpMinted(total, amountOut, feeAmount);
     }
 
     /// @notice wrap the token0 and token1 deposited into the contract from a previous withdrawAndUnwrapTo
     /// and wrap into a strategyTokenIn lp token.
-    /// @param minDustAmount the minimum token0 or token1 left after the first addLiquidity to consider
+    /// @param minDustAmount0 the minimum token0 left after the first addLiquidity to consider
     /// swapping into more strategyTokenIn Lps
-    function wrapAndDeposit(uint256 minDustAmount) external override returns (uint256 amount, uint256 priceAmount) {
+    /// @param minDustAmount1 same as `minDustAmount0` but for token1
+    function wrapAndDeposit(uint256 minDustAmount0, uint256 minDustAmount1)
+        external
+        override
+        onlyDynamicStrategy
+        returns (uint256 amount, uint256 priceAmount)
+    {
         RouterInfo memory _strategyTokenInInfo = strategyTokenInInfo;
         address token0 = ISushiSwap(strategyTokenIn).token0();
         address token1 = ISushiSwap(strategyTokenIn).token1();
@@ -240,7 +249,7 @@ contract DynamicSubLPStrategy is IDynamicSubLPStrategy, Ownable {
         token0Balance = token0Balance - idealAmount0;
         token1Balance = token1Balance - idealAmount1;
 
-        if (token0Balance >= minDustAmount || token1Balance >= minDustAmount) {
+        if (token0Balance >= minDustAmount0 && token1Balance >= minDustAmount1) {
             // swap remaining token0 in the contract
             if (token0Balance > 0) {
                 uint256 swapAmountIn = _calculateSwapInAmount(reserve0, token0Balance);
@@ -248,7 +257,7 @@ contract DynamicSubLPStrategy is IDynamicSubLPStrategy, Ownable {
                 token0Balance -= swapAmountIn;
                 token1Balance = _getAmountOut(swapAmountIn, reserve0, reserve1);
 
-                IERC20(token0).transfer(strategyTokenIn, swapAmountIn);
+                IERC20(token0).safeTransfer(strategyTokenIn, swapAmountIn);
                 ISushiSwap(strategyTokenIn).swap(0, token1Balance, address(this), "");
             }
             // swap remaining token1 in the contract
@@ -258,22 +267,24 @@ contract DynamicSubLPStrategy is IDynamicSubLPStrategy, Ownable {
                 token1Balance -= swapAmountIn;
                 token0Balance = _getAmountOut(swapAmountIn, reserve1, reserve0);
 
-                IERC20(token0).transfer(strategyTokenIn, swapAmountIn);
+                IERC20(token0).safeTransfer(strategyTokenIn, swapAmountIn);
                 ISushiSwap(strategyTokenIn).swap(token0Balance, 0, address(this), "");
             }
 
-            (, , uint256 lpAmountFromRemaining) = _strategyTokenInInfo.router.addLiquidity(
-                token0,
-                token0,
-                token0Balance,
-                token1Balance,
-                1,
-                1,
-                address(this),
-                type(uint256).max
-            );
+            if (token0Balance > 0 && token1Balance > 0) {
+                (, , uint256 lpAmountFromRemaining) = _strategyTokenInInfo.router.addLiquidity(
+                    token0,
+                    token1,
+                    token0Balance,
+                    token1Balance,
+                    1,
+                    1,
+                    address(this),
+                    type(uint256).max
+                );
 
-            lpAmount += lpAmountFromRemaining;
+                lpAmount += lpAmountFromRemaining;
+            }
         }
 
         amount = lpAmount;
@@ -287,7 +298,12 @@ contract DynamicSubLPStrategy is IDynamicSubLPStrategy, Ownable {
     /// the next strategy can use the liquidity and wrap it back.
     /// Note: this function will potentially leave out some reward tokens, so the harvest/swapToLp/harvest routine
     /// should be run beforehand.
-    function withdrawAndUnwrapTo(IDynamicSubLPStrategy recipient) external override returns (uint256 amount, uint256 priceAmount) {
+    function withdrawAndUnwrapTo(IDynamicSubLPStrategy recipient)
+        external
+        override
+        onlyDynamicStrategy
+        returns (uint256 amount, uint256 priceAmount)
+    {
         (uint256 stakedAmount, ) = masterchef.userInfo(pid, address(this));
         masterchef.withdraw(pid, stakedAmount);
 
@@ -297,7 +313,7 @@ contract DynamicSubLPStrategy is IDynamicSubLPStrategy, Ownable {
 
         /// @dev calculate the price before removing the liquidity
         priceAmount = (amount * 1e36) / oracle.peekSpot("");
-     
+
         ISushiSwap(strategyTokenIn).removeLiquidity(token0, token1, amount, 0, 0, address(recipient), type(uint256).max);
     }
 

@@ -17,7 +17,7 @@ interface IDynamicSubLPStrategy {
 
     function strategyTokenOut() external view returns (address);
 
-    function wrapAndDeposit(uint256 minDustAmount) external returns (uint256 amount, uint256 amountPrice);
+    function wrapAndDeposit(uint256 minDustAmount0, uint256 minDustAmount1) external returns (uint256 amount, uint256 amountPrice);
 
     function withdrawAndUnwrapTo(IDynamicSubLPStrategy recipient) external returns (uint256 amount, uint256 amountPrice);
 
