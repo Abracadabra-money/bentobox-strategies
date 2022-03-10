@@ -5,6 +5,8 @@ pragma solidity 0.8.7;
 import "./IOracle.sol";
 
 interface IDynamicSubLPStrategy {
+    function dynamicStrategy() external view returns (address);
+
     function skim(uint256 amount) external;
 
     function harvest() external returns (uint256 amountAdded);

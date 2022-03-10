@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 pragma solidity 0.8.7;
-
-import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "@rari-capital/solmate/src/tokens/ERC20.sol";
+import "@rari-capital/solmate/src/utils/SafeTransferLib.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "../../libraries/Babylonian.sol";
 import "../../interfaces/IStrategy.sol";
@@ -15,7 +15,7 @@ import "../../interfaces/IBentoBoxMinimal.sol";
 /// For example, farming on Trader Joe then unwrap the jLP to
 /// mint pLP and farm on Pengolin.
 contract DynamicLPStrategy is IStrategy, Ownable {
-    using SafeERC20 for IERC20;
+    using SafeTransferLib for ERC20;
 
     address public immutable strategyToken;
     address public immutable token0;
@@ -91,13 +91,20 @@ contract DynamicLPStrategy is IStrategy, Ownable {
 
     function addSubStrategy(IDynamicSubLPStrategy subStrategy) public onlyOwner {
         require(address(subStrategy) != address(0), "zero address");
+        require(subStrategy.dynamicStrategy() == address(this), "dynamicStrategy mismatch");
 
         /// @dev make sure the strategy pair token is using the same token0 and token1
         ISushiSwap sushiPair = ISushiSwap(subStrategy.strategyTokenIn());
-        require(sushiPair.token0() == token0 && sushiPair.token1() == token1, "not compatible");
+        require(sushiPair.token0() == token0 && sushiPair.token1() == token1, "incompatible tokens");
 
         subStrategies.push(subStrategy);
         emit LogSubStrategyAdded(address(subStrategy));
+
+        if (address(currentSubStrategy) == address(0)) {
+            currentSubStrategy = subStrategy;
+
+            emit LogSubStrategyChanged(address(0), address(currentSubStrategy), 0, 0, 0, 0);
+        }
     }
 
     /// @param index the index of the next strategy to use
@@ -109,7 +116,12 @@ contract DynamicLPStrategy is IStrategy, Ownable {
     ///                     amount left in the contract (from new pair imbalance),
     ///                     should be considered to swap again for more liquidity. Set to 0 to ignore.
     /// @param minDustAmount1 same as minDustAmount0 but for token1
-    function setCurrentStrategy(uint256 index, uint256 maximumBps, uint256 minDustAmount0, uint256 minDustAmount1) public onlyOwner {
+    function changeStrategy(
+        uint256 index,
+        uint256 maximumBps,
+        uint256 minDustAmount0,
+        uint256 minDustAmount1
+    ) public onlyOwner {
         require(index < subStrategies.length, "invalid index");
 
         IDynamicSubLPStrategy previousSubStrategy = currentSubStrategy;
@@ -142,6 +154,9 @@ contract DynamicLPStrategy is IStrategy, Ownable {
 
     /// @inheritdoc IStrategy
     function skim(uint256 amount) external override onlyValidStrategy {
+        /// @dev bentobox transfers the token in this strategy so we need to
+        /// forward them to the sub strategy so that the specific skim can work.
+        ERC20(strategyToken).transfer(address(currentSubStrategy), amount);
         currentSubStrategy.skim(amount);
     }
 
@@ -174,6 +189,8 @@ contract DynamicLPStrategy is IStrategy, Ownable {
     /// and (2) that we are not being frontrun by a large BentoBox deposit when harvesting profits.
     /// @dev Beware that calling harvest can result in a subsequent skim or withdraw call if it's rebalancing.
     function harvest(uint256 balance, address sender) external override isActive onlyBentoBox returns (int256) {
+        require(address(currentSubStrategy) != address(0), "zero address");
+
         /** @dev Don't revert if conditions aren't met in order to allow
             BentoBox to continiue execution as it might need to do a rebalance. */
         if (sender == address(this) && IBentoBoxMinimal(bentoBox).totals(strategyToken).elastic <= maxBentoBoxBalance && balance > 0) {
