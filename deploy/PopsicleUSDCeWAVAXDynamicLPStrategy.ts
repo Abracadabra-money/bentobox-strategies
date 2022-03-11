@@ -54,7 +54,7 @@ const deployFunction: DeployFunction = async function (hre: HardhatRuntimeEnviro
         pairCodeHash: "0x0bbca9af0511ad1a1da383135cf3a8d2ac620e549ef9f6ae3a4c33c2fed0af91", // pair hash code for TraderJoe
       },
     ],
-    contract: "DynamicSubLPStrategy",
+    contract: "JoeDynamicSubLPStrategy",
     log: true,
     deterministicDeployment: false,
   });
@@ -86,7 +86,7 @@ const deployFunction: DeployFunction = async function (hre: HardhatRuntimeEnviro
         pairCodeHash: "0x0bbca9af0511ad1a1da383135cf3a8d2ac620e549ef9f6ae3a4c33c2fed0af91", // pair hash code for TraderJoe
       },
     ],
-    contract: "DynamicSubLPStrategy",
+    contract: "PangolinDynamicSubLPStrategy",
     log: true,
     deterministicDeployment: false,
   });

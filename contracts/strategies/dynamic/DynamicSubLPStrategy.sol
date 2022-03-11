@@ -8,15 +8,15 @@ import "@rari-capital/solmate/src/utils/SafeTransferLib.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "../../BaseStrategy.sol";
 import "../../interfaces/ISushiSwap.sol";
-import "../../interfaces/IMasterChef.sol";
 import "../../interfaces/IDynamicSubLPStrategy.sol";
 import "../../interfaces/IOracle.sol";
 import "../../libraries/Babylonian.sol";
 
-/// @notice DynamicLPStrategy sub-strategy for uniswap-forks with 0.3% fees
+/// @notice DynamicSubLPStrategy sub-strategy for uniswap-forks with 0.3% fees
 /// @dev For gas saving, the strategy directly transfers to bentobox instead
-/// of transfering to DynamicLPStrategy.
-contract DynamicSubLPStrategy is IDynamicSubLPStrategy, Ownable {
+/// of transfering to DynamicLPStrategy. This contract is made abstract so we can
+/// implements fork specificities.
+abstract contract DynamicSubLPStrategy is IDynamicSubLPStrategy, Ownable {
     using SafeTransferLib for ERC20;
 
     event LpMinted(uint256 total, uint256 strategyAmount, uint256 feeAmount);
@@ -33,7 +33,6 @@ contract DynamicSubLPStrategy is IDynamicSubLPStrategy, Ownable {
 
     IOracle public immutable oracle;
     address public immutable bentoBox;
-    IMasterChef public immutable masterchef;
     uint8 public immutable pid;
 
     /// @notice When true, the _rewardToken will be swapped to the pair's
@@ -58,7 +57,6 @@ contract DynamicSubLPStrategy is IDynamicSubLPStrategy, Ownable {
         @param _strategyTokenIn Address of the LP token the strategy is farming with
         @param _strategyTokenOut Address of the LP token the strategy is swapping the rewardTokens to
         @param _oracle The oracle to price the strategyTokenOut. peekSpot needs to send the inverse price in USD
-        @param _masterchef The masterchef contract for staking
         @param _rewardToken The token the staking is farming
         @param _pid The masterchef pool id for strategyTokenIn staking
         @param _usePairToken0 When true, the _rewardToken will be swapped to the pair's token0 for one-sided liquidity
@@ -72,7 +70,6 @@ contract DynamicSubLPStrategy is IDynamicSubLPStrategy, Ownable {
         address _strategyTokenIn,
         address _strategyTokenOut,
         IOracle _oracle,
-        IMasterChef _masterchef,
         address _rewardToken,
         uint8 _pid,
         bool _usePairToken0,
@@ -84,15 +81,13 @@ contract DynamicSubLPStrategy is IDynamicSubLPStrategy, Ownable {
         strategyTokenIn = _strategyTokenIn;
         strategyTokenOut = _strategyTokenOut;
         oracle = _oracle;
-        masterchef = _masterchef;
         rewardToken = _rewardToken;
         pid = _pid;
         usePairToken0 = _usePairToken0;
         strategyTokenInInfo = _strategyTokenInInfo;
         strategyTokenOutInfo = _strategyTokenOutInfo;
 
-        // For staking
-        ERC20(_strategyTokenIn).safeApprove(address(_masterchef), type(uint256).max);
+        ERC20(_strategyTokenIn).safeApprove(address(_strategyTokenInInfo.router), type(uint256).max);
 
         // For wrapping from token0 and token1 to strategyTokenIn
         address token0 = ISushiSwap(_strategyTokenIn).token0();
@@ -109,12 +104,12 @@ contract DynamicSubLPStrategy is IDynamicSubLPStrategy, Ownable {
     }
 
     modifier onlyDynamicStrategy() {
-        require(msg.sender == dynamicStrategy, "invalid sender");
+        require(msg.sender == dynamicStrategy, "unauthorized");
         _;
     }
 
     function skim(uint256 amount) external override onlyDynamicStrategy {
-        masterchef.deposit(pid, amount);
+        _deposit(amount);
     }
 
     /// @dev harvest the rewardToken from masterchef and send the strategyTokenOut to bentobox.
@@ -122,7 +117,7 @@ contract DynamicSubLPStrategy is IDynamicSubLPStrategy, Ownable {
     /// more strategyTokenOut. In this case, a subsequent call to harvest is necessary for the
     /// strategyTokenOut tokens to be available for transfer.
     function harvest() external override onlyDynamicStrategy returns (uint256 amountAdded) {
-        masterchef.withdraw(pid, 0);
+        _claimRewards();
 
         /// @dev transfer the strategyTokenOut to bentobox directly and
         /// report the amount added.
@@ -134,7 +129,7 @@ contract DynamicSubLPStrategy is IDynamicSubLPStrategy, Ownable {
     /// Only to be used when the strategyTokenIn matches the dyanmic strategyToken.
     /// (validated inside DynamicLPStrategy.withdraw)
     function withdraw(uint256 amount) external override onlyDynamicStrategy returns (uint256 actualAmount) {
-        masterchef.withdraw(pid, amount);
+        _withdraw(amount);
 
         actualAmount = ERC20(strategyTokenIn).balanceOf(address(this));
         ERC20(strategyTokenIn).safeTransfer(bentoBox, actualAmount);
@@ -144,7 +139,7 @@ contract DynamicSubLPStrategy is IDynamicSubLPStrategy, Ownable {
     /// Only to be used when the strategyTokenIn matches the dyanmic strategyToken.
     /// (validated inside DynamicLPStrategy.exit)
     function exit() external override onlyDynamicStrategy returns (uint256 actualAmount) {
-        masterchef.emergencyWithdraw(pid);
+        _emergencyWithdraw();
 
         actualAmount = ERC20(strategyTokenIn).balanceOf(address(this));
         ERC20(strategyTokenIn).safeTransfer(bentoBox, actualAmount);
@@ -269,7 +264,7 @@ contract DynamicSubLPStrategy is IDynamicSubLPStrategy, Ownable {
                 token1Balance -= swapAmountIn;
                 token0Balance = _getAmountOut(swapAmountIn, reserve1, reserve0);
 
-                ERC20(token0).safeTransfer(strategyTokenIn, swapAmountIn);
+                ERC20(token1).safeTransfer(strategyTokenIn, swapAmountIn);
                 ISushiSwap(strategyTokenIn).swap(token0Balance, 0, address(this), "");
             }
 
@@ -290,9 +285,8 @@ contract DynamicSubLPStrategy is IDynamicSubLPStrategy, Ownable {
         }
 
         amount = lpAmount;
-        masterchef.deposit(pid, lpAmount);
-        priceAmount = (amount * 1e36) / oracle.peekSpot("");
-
+        _deposit(lpAmount);
+        priceAmount = (amount * 1e18) / oracle.peekSpot("");
         emit LpMinted(lpAmount, lpAmount, 0);
     }
 
@@ -306,17 +300,16 @@ contract DynamicSubLPStrategy is IDynamicSubLPStrategy, Ownable {
         onlyDynamicStrategy
         returns (uint256 amount, uint256 priceAmount)
     {
-        (uint256 stakedAmount, ) = masterchef.userInfo(pid, address(this));
-        masterchef.withdraw(pid, stakedAmount);
+        (uint256 stakedAmount, ) = _userInfo();
+        _withdraw(stakedAmount);
 
         address token0 = ISushiSwap(strategyTokenIn).token0();
         address token1 = ISushiSwap(strategyTokenIn).token1();
         amount = ERC20(strategyTokenIn).balanceOf(address(this));
 
         /// @dev calculate the price before removing the liquidity
-        priceAmount = (amount * 1e36) / oracle.peekSpot("");
-
-        ISushiSwap(strategyTokenIn).removeLiquidity(token0, token1, amount, 0, 0, address(recipient), type(uint256).max);
+        priceAmount = (amount * 1e18) / oracle.peekSpot("");
+        ISushiSwap(strategyTokenInInfo.router).removeLiquidity(token0, token1, amount, 0, 0, address(recipient), type(uint256).max);
     }
 
     /// @notice emergency function in case of fund locked.
@@ -379,4 +372,15 @@ contract DynamicSubLPStrategy is IDynamicSubLPStrategy, Ownable {
         uint256 denominator = (reserveIn * 1000) + amountInWithFee;
         amountOut = numerator / denominator;
     }
+
+    /// @dev force to reimplement masterchef interface for common staking interface
+    function _deposit(uint256 amount) internal virtual;
+
+    function _claimRewards() internal virtual;
+
+    function _withdraw(uint256 amount) internal virtual;
+
+    function _userInfo() internal view virtual returns (uint256 amount, uint256 rewardDebt);
+
+    function _emergencyWithdraw() internal virtual;
 }

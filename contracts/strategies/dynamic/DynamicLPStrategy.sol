@@ -108,7 +108,7 @@ contract DynamicLPStrategy is IStrategy, Ownable {
     }
 
     /// @param index the index of the next strategy to use
-    /// @param maximumBps maximum tolerated amount of basis points of the total migrated
+    /// @param maxSlippageBps maximum tolerated amount of basis points of the total migrated
     ///                   5 = 0.05%
     ///                   10_000 = 100%
     /// @param minDustAmount0 when the new strategy needs to wrap the token0 and token1 from previousSubStrategy
@@ -118,10 +118,10 @@ contract DynamicLPStrategy is IStrategy, Ownable {
     /// @param minDustAmount1 same as minDustAmount0 but for token1
     function changeStrategy(
         uint256 index,
-        uint256 maximumBps,
+        uint256 maxSlippageBps,
         uint256 minDustAmount0,
         uint256 minDustAmount1
-    ) public onlyOwner {
+    ) public onlyExecutor {
         require(index < subStrategies.length, "invalid index");
 
         IDynamicSubLPStrategy previousSubStrategy = currentSubStrategy;
@@ -137,7 +137,7 @@ contract DynamicLPStrategy is IStrategy, Ownable {
             /// @dev wrap from the tokens sent from the previous strategy
             (uint256 amountTo, uint256 priceAmountTo) = currentSubStrategy.wrapAndDeposit(minDustAmount0, minDustAmount1);
 
-            uint256 minToteraledPrice = priceAmountFrom - ((priceAmountFrom * maximumBps) / 10_000);
+            uint256 minToteraledPrice = priceAmountFrom - ((priceAmountFrom * maxSlippageBps) / 10_000);
 
             require(priceAmountTo >= minToteraledPrice, "maximumBps exceeded");
 
@@ -191,8 +191,8 @@ contract DynamicLPStrategy is IStrategy, Ownable {
     function harvest(uint256 balance, address sender) external override isActive onlyBentoBox returns (int256) {
         require(address(currentSubStrategy) != address(0), "zero address");
 
-        /** @dev Don't revert if conditions aren't met in order to allow
-            BentoBox to continiue execution as it might need to do a rebalance. */
+        /// @dev Don't revert if conditions aren't met in order to allow
+        /// BentoBox to continue execution as it might need to do a rebalance.
         if (sender == address(this) && IBentoBoxMinimal(bentoBox).totals(strategyToken).elastic <= maxBentoBoxBalance && balance > 0) {
             return int256(currentSubStrategy.harvest());
         }
