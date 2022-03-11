@@ -13,8 +13,6 @@ import "../../interfaces/IDynamicSubLPStrategy.sol";
 import "../../interfaces/IOracle.sol";
 import "../../libraries/Babylonian.sol";
 
-import "hardhat/console.sol";
-
 /// @notice DynamicLPStrategy sub-strategy for uniswap-forks with 0.3% fees
 /// @dev For gas saving, the strategy directly transfers to bentobox instead
 /// of transfering to DynamicLPStrategy.
