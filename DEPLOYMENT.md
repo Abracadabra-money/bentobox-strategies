@@ -30,10 +30,12 @@
 | ------------- | ------------------------------------------ | ------------------------------------------ |
 | Cake strategy | 0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82 | 0x08B918dD18E087893bb9d711d9E0BBaA7a63Ef63 |
 
-
 ## Avalanche - Popsicle Dynamic LP Strategies
 
 **USDC.e/WAVAX**
-| Contract      | Strategy Token address                              | Strategy Address                           |
-| ------------- | ------------------------------------------ | ------------------------------------------ |
-| PopsicleUSDCeWAVAXDynamicLpStrategy | TBD | TBD |
+
+| Contract                                    | Strategy Address                           |
+| ------------------------------------------- | ------------------------------------------ |
+| Popsicle_UsdceWavaxJLP_DynamicLPStrategy    | 0x0D2a5107435cbbBE21Db1ADB5F1E078E63e59449 |
+| Popsicle_UsdceWavaxJLP_DynamicSubLPStrategy | 0xaF2fBB9CB80EdFb7d3f2d170a65AE3bFa42d0B86 |
+| Popsicle_UsdceWavaxPLP_DynamicSubLPStrategy | 0xe05811aff7A105fe05b7144F4E0Dd777a83a194e |

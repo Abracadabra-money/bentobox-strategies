@@ -23,6 +23,12 @@ interface IDynamicSubLPStrategy {
 
     function withdrawAndUnwrapTo(IDynamicSubLPStrategy recipient) external returns (uint256 amount, uint256 amountPrice);
 
+    function rescueTokens(
+        address token,
+        address to,
+        uint256 amount
+    ) external;
+
     function swapToLP(
         uint256 amountOutMin,
         uint256 feePercent,
