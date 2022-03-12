@@ -4,11 +4,13 @@ import { expect } from "chai";
 
 import { BentoBoxV1, DynamicLPStrategy, DynamicSubLPStrategy, IERC20, IMasterChef, IMiniChefV2 } from "../typechain";
 import { advanceTime, getBigNumber, impersonate, latest } from "../utilities";
+import { BigNumber } from "ethers";
 
 describe("Popsicle USDC.e/WAVAX Dynamic LP Strategy", async () => {
   let snapshotId;
   let Strategy: DynamicLPStrategy;
   let DegenBox: BentoBoxV1;
+  let degenBoxOwnerSigner;
 
   let PngSubStrategy: DynamicSubLPStrategy;
   let JoeSubStrategy: DynamicSubLPStrategy;
@@ -46,7 +48,7 @@ describe("Popsicle USDC.e/WAVAX Dynamic LP Strategy", async () => {
 
     const degenBoxOwner = await DegenBox.owner();
     await impersonate(degenBoxOwner);
-    const degenBoxOnwerSigner = await ethers.getSigner(degenBoxOwner);
+    degenBoxOwnerSigner = await ethers.getSigner(degenBoxOwner);
 
     MasterChefJoe = await ethers.getContractAt<IMasterChef>("IMasterChef", "0xd6a4F121CA35509aF06A0Be99093d08462f53052");
     MiniChefPng = await ethers.getContractAt<IMiniChefV2>("IMiniChefV2", "0x1f806f7C8dED893fd3caE279191ad7Aa3798E928");
@@ -78,7 +80,7 @@ describe("Popsicle USDC.e/WAVAX Dynamic LP Strategy", async () => {
     await DegenBox.connect(lpHolderSigner).deposit(JoeLP.address, lpHolder, alice.address, lpAmount, 0);
 
     // Activate strategy
-    DegenBox = DegenBox.connect(degenBoxOnwerSigner);
+    DegenBox = DegenBox.connect(degenBoxOwnerSigner);
     await DegenBox.setStrategy(JoeLP.address, Strategy.address);
     await advanceTime(1210000);
     await DegenBox.setStrategy(JoeLP.address, Strategy.address);
@@ -158,7 +160,7 @@ describe("Popsicle USDC.e/WAVAX Dynamic LP Strategy", async () => {
     await expect(Strategy.swapToLP(getBigNumber(2, 14))).to.revertedWith("INSUFFICIENT_AMOUNT_OUT");
   });
 
-  it("should harvest harvest, mint lp and report a profit", async () => {
+  it("should harvest, mint lp and report a profit", async () => {
     const oldBentoBalance = (await DegenBox.totals(JoeLP.address)).elastic;
 
     await advanceTime(1210000);
@@ -221,8 +223,13 @@ describe("Popsicle USDC.e/WAVAX Dynamic LP Strategy", async () => {
     await expect(Strategy.changeStrategy(100, 10_000, 0, 0)).to.be.revertedWith("invalid index");
   });
 
-  describe.only("pangolin sub strategy", async () => {
+  describe("pangolin sub strategy", async () => {
+    const rewardAdvanceTime = 60 * 60 * 24 * 5; // 5 days
+    let startingJLPAmount;
+
     beforeEach(async () => {
+      startingJLPAmount = (await MasterChefJoe.userInfo(39, await Strategy.currentSubStrategy())).amount;
+
       // change strategy with 0.1% max slippage
       await expect(Strategy.changeStrategy(1, 10, 0, 0)).to.emit(Strategy, "LogSubStrategyChanged");
     });
@@ -232,7 +239,7 @@ describe("Popsicle USDC.e/WAVAX Dynamic LP Strategy", async () => {
       let previousAmount = await PngToken.balanceOf(subStrategy);
 
       for (let i = 0; i < 10; i++) {
-        await advanceTime(60 * 60 * 24 * 5); // 5 day
+        await advanceTime(rewardAdvanceTime); // 5 day
 
         await Strategy.safeHarvest(ethers.constants.MaxUint256, false, 0);
         const amount = await PngToken.balanceOf(subStrategy);
@@ -241,10 +248,10 @@ describe("Popsicle USDC.e/WAVAX Dynamic LP Strategy", async () => {
       }
     });
 
-    /*it("should mint lp from joe rewards and take 10%", async () => {
+    it("should mint lp from png rewards and take 10%", async () => {
       const { deployer } = await getNamedAccounts();
       let subStrategy = await Strategy.currentSubStrategy();
-      await advanceTime(1210000);
+      await advanceTime(rewardAdvanceTime);
 
       await Strategy.setFeeParameters(deployer, 10);
       await Strategy.safeHarvest(0, false, 0);
@@ -274,7 +281,7 @@ describe("Popsicle USDC.e/WAVAX Dynamic LP Strategy", async () => {
     });
 
     it("should avoid front running when minting lp", async () => {
-      await advanceTime(1210000);
+      await advanceTime(rewardAdvanceTime);
       await Strategy.safeHarvest(0, false, 0);
 
       // expected amount out should be around 11e13 so adding extra decimals to
@@ -282,21 +289,49 @@ describe("Popsicle USDC.e/WAVAX Dynamic LP Strategy", async () => {
       await expect(Strategy.swapToLP(getBigNumber(2, 14))).to.revertedWith("INSUFFICIENT_AMOUNT_OUT");
     });
 
-    it("should harvest harvest, mint lp and report a profit", async () => {
+    it("should harvest using pangolin strat, mint lp, and report a profit", async () => {
       const oldBentoBalance = (await DegenBox.totals(JoeLP.address)).elastic;
 
-      await advanceTime(1210000);
-      await Strategy.safeHarvest(0, false, 0); // harvest joe
-      await Strategy.swapToLP(0); // mint new usdc/avax lp from harvest joe
+      await advanceTime(rewardAdvanceTime);
+      await Strategy.safeHarvest(0, false, 0); // harvest png
+      await Strategy.swapToLP(0); // mint new usdc/avax jLP from harvested png
 
-      // harvest joe, report lp profit to bentobox
+      // harvest png, report lp profit to bentobox
       await expect(Strategy.safeHarvest(0, false, 0)).to.emit(DegenBox, "LogStrategyProfit");
       const newBentoBalance = (await DegenBox.totals(JoeLP.address)).elastic;
       expect(newBentoBalance).to.be.gt(oldBentoBalance);
     });
 
-    it("should rebalance and withdraw lp to degenbox", async () => {
+    it("should not be possible to skim, withdraw, rebalance or exit when the current strategy tokenIn is different from strategy tokenIn", async () => {
+      const message = "not handling strategyToken";
+      await impersonate(DegenBox.address);
+      const degenboxSigner = await ethers.getSigner(DegenBox.address);
+
+      await expect(Strategy.skim(0)).to.be.revertedWith(message);
+      await expect(Strategy.connect(degenboxSigner).withdraw(0)).to.be.revertedWith(message);
+      await expect(Strategy.connect(degenboxSigner).exit(0)).to.be.revertedWith(message);
+      await expect(Strategy.safeHarvest(0, true, 0)).to.not.be.revertedWith(message);
+
+      await DegenBox.connect(degenBoxOwnerSigner).setStrategyTargetPercentage(JoeLP.address, "10");
+      await expect(Strategy.safeHarvest(0, true, 0)).to.be.revertedWith(message);
+    });
+
+    it("should be possible to switch back between the sub strategy multiple times", async () => {
+      await expect(Strategy.changeStrategy(0, 5, 0, 0)).to.emit(Strategy, "LogSubStrategyChanged");
+      await expect(Strategy.changeStrategy(1, 5, 0, 0)).to.emit(Strategy, "LogSubStrategyChanged");
+      await expect(Strategy.changeStrategy(0, 5, 0, 0)).to.emit(Strategy, "LogSubStrategyChanged");
+      await expect(Strategy.changeStrategy(1, 5, 0, 0)).to.emit(Strategy, "LogSubStrategyChanged");
+      await expect(Strategy.changeStrategy(0, 5, 0, 0)).to.emit(Strategy, "LogSubStrategyChanged");
+
+      const endingJLPAmount = (await MasterChefJoe.userInfo(39, await Strategy.currentSubStrategy())).amount;
+
+      // around 5e9 wei different in LP amount
+      expect(endingJLPAmount).to.be.within(startingJLPAmount.sub(BigNumber.from(5e9)), startingJLPAmount);
+    });
+
+    it("should switch back to default strategy, rebalance and withdraw lp to degenbox", async () => {
       const oldBentoBalance = await JoeLP.balanceOf(DegenBox.address);
+      await Strategy.changeStrategy(0, 5, 0, 0);
       await DegenBox.setStrategyTargetPercentage(JoeLP.address, 50);
       await expect(Strategy.safeHarvest(0, true, 0)).to.emit(DegenBox, "LogStrategyDivest");
       const newBentoBalance = await JoeLP.balanceOf(DegenBox.address);
@@ -304,20 +339,22 @@ describe("Popsicle USDC.e/WAVAX Dynamic LP Strategy", async () => {
       expect(newBentoBalance).to.be.gt(oldBentoBalance);
     });
 
-    it("should exit the strategy properly", async () => {
+    it("should  switch back to default strategy and exit the strategy properly", async () => {
       const oldBentoBalance = await JoeLP.balanceOf(DegenBox.address);
 
-      await advanceTime(1210000);
+      await advanceTime(rewardAdvanceTime);
       await Strategy.safeHarvest(0, false, 0); // harvest joe
       await Strategy.swapToLP(0); // mint new usdc/avax lp from harvest joe
 
+      await Strategy.changeStrategy(0, 5, 0, 0);
+
       await expect(DegenBox.setStrategy(JoeLP.address, Strategy.address)).to.emit(DegenBox, "LogStrategyQueued");
-      await advanceTime(1210000);
+      await advanceTime(rewardAdvanceTime);
       await expect(DegenBox.setStrategy(JoeLP.address, Strategy.address)).to.emit(DegenBox, "LogStrategyDivest");
       const newBentoBalance = await JoeLP.balanceOf(DegenBox.address);
 
       expect(newBentoBalance).to.be.gt(oldBentoBalance);
       expect(await JoeLP.balanceOf(Strategy.address)).to.eq(0);
-    });*/
+    });
   });
 });
