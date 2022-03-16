@@ -101,6 +101,7 @@ contract DynamicLPStrategy is IStrategy, Ownable {
         emit LogSubStrategyAdded(address(subStrategy));
 
         if (address(currentSubStrategy) == address(0)) {
+            require(subStrategy.strategyTokenIn() == strategyToken, "not strategyTokenIn");
             currentSubStrategy = subStrategy;
 
             emit LogSubStrategyChanged(address(0), address(currentSubStrategy), 0, 0, 0, 0);
