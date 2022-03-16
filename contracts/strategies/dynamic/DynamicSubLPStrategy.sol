@@ -314,11 +314,11 @@ abstract contract DynamicSubLPStrategy is IDynamicSubLPStrategy, Ownable {
 
     /// @notice emergency function in case of fund locked.
     function rescueTokens(
-        ERC20 token,
+        address token,
         address to,
         uint256 amount
-    ) external onlyOwner {
-        token.safeTransfer(to, amount);
+    ) external override onlyOwner {
+        ERC20(token).safeTransfer(to, amount);
     }
 
     function _swap(
