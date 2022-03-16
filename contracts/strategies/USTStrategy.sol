@@ -186,12 +186,15 @@ contract USTStrategy is BaseStrategy {
     IERC20 public constant UST = IERC20(0xa47c8bf37f92aBed4A126BDA807A7b7498661acD);
     IERC20 public constant aUST = IERC20(0xa8De3e3c934e2A1BB08B010104CcaBBD4D6293ab);
     address private constant degenBox = 0xd96f48665a1410C0cd669A88898ecA36B9Fc2cce;
+    uint256 private constant FEE = 10; // 10% fees on minted LP
+    address public feeCollector;
 
     constructor(
         address strategyExecutor
     ) BaseStrategy(address(UST), degenBox, address(0), address(0), strategyExecutor) {
         UST.approve(address(router), type(uint256).max);
         aUST.approve(address(router), type(uint256).max);
+        feeCollector = msg.sender;
     }
     
     function _skim(uint256 amount) internal override {
@@ -224,10 +227,16 @@ contract USTStrategy is BaseStrategy {
             if (amount >= 0) { // _harvest reported a profit
 
                 if (contractBalance >= uint256(amount)) {
-                    IERC20(strategyToken).safeTransfer(bentoBox, uint256(amount));
+                    uint256 feeAmount = (uint256(amount) * FEE) / 100;
+                    uint256 toTransfer = uint256(amount) - feeAmount;
+                    IERC20(strategyToken).safeTransfer(bentoBox, uint256(toTransfer));
+                    IERC20(strategyToken).safeTransfer(feeCollector, feeAmount);
                     return(amount);
                 } else {
-                    IERC20(strategyToken).safeTransfer(bentoBox, contractBalance);
+                    uint256 feeAmount = (uint256(contractBalance) * FEE) / 100;
+                    uint256 toTransfer = uint256(contractBalance) - feeAmount;
+                    IERC20(strategyToken).safeTransfer(bentoBox, toTransfer);
+                    IERC20(strategyToken).safeTransfer(feeCollector, feeAmount);
                     return int256(contractBalance);
                 }
 
@@ -253,11 +262,11 @@ contract USTStrategy is BaseStrategy {
     }
 
     function redeemEarnings() external onlyExecutor {
-        uint256 balance = IBentoBoxMinimal(bentoBox).strategyData(address(UST)).balance;
+        uint256 balanceToKeep = IBentoBoxMinimal(bentoBox).strategyData(address(UST)).balance;
         uint256 exchangeRate = feeder.exchangeRateOf(address(UST), true);
-        uint256 keep = toAUST(balance, exchangeRate);
-        uint256 total = aUST.balanceOf(address(this)) + toAUST(UST.balanceOf(address(this)), exchangeRate);
-        if (total > keep) router.redeemStable(total - keep);
+        uint256 liquid = UST.balanceOf(address(this);
+        uint256 total = toUST(aUST.balanceOf(address(this)), exchangeRate) + liquid;
+        if (total > balanceToKeep) router.redeemStable(toAUST(total - keep - liquid, exchangeRate));
     }
 
     function safeDeposit(uint256 amount) external onlyExecutor {
@@ -272,6 +281,10 @@ contract USTStrategy is BaseStrategy {
 
     function updateExchangeRateFeeder(IExchangeRateFeeder feeder_) external onlyOwner {
         feeder = feeder_;
+    }
+
+    function setFeeCollector(address _feeCollector) external onlyOwner {
+        feeCollector = _feeCollector;
     }
 
     function _exit() internal override {
