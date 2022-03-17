@@ -186,7 +186,7 @@ contract USTStrategy is BaseStrategy {
     IERC20 public constant UST = IERC20(0xa47c8bf37f92aBed4A126BDA807A7b7498661acD);
     IERC20 public constant aUST = IERC20(0xa8De3e3c934e2A1BB08B010104CcaBBD4D6293ab);
     address private constant degenBox = 0xd96f48665a1410C0cd669A88898ecA36B9Fc2cce;
-    uint256 private constant FEE = 10; // 10% fees on minted LP
+    uint256 public fee; // fees on ust
     address public feeCollector;
 
     constructor(
@@ -195,6 +195,7 @@ contract USTStrategy is BaseStrategy {
         UST.approve(address(router), type(uint256).max);
         aUST.approve(address(router), type(uint256).max);
         feeCollector = msg.sender;
+        fee = 10;
     }
     
     function _skim(uint256 amount) internal override {
@@ -227,13 +228,13 @@ contract USTStrategy is BaseStrategy {
             if (amount >= 0) { // _harvest reported a profit
 
                 if (contractBalance >= uint256(amount)) {
-                    uint256 feeAmount = (uint256(amount) * FEE) / 100;
+                    uint256 feeAmount = (uint256(amount) * fee) / 100;
                     uint256 toTransfer = uint256(amount) - feeAmount;
                     IERC20(strategyToken).safeTransfer(bentoBox, uint256(toTransfer));
                     IERC20(strategyToken).safeTransfer(feeCollector, feeAmount);
                     return(amount);
                 } else {
-                    uint256 feeAmount = (uint256(contractBalance) * FEE) / 100;
+                    uint256 feeAmount = (uint256(contractBalance) * fee) / 100;
                     uint256 toTransfer = uint256(contractBalance) - feeAmount;
                     IERC20(strategyToken).safeTransfer(bentoBox, toTransfer);
                     IERC20(strategyToken).safeTransfer(feeCollector, feeAmount);
@@ -283,8 +284,10 @@ contract USTStrategy is BaseStrategy {
         feeder = feeder_;
     }
 
-    function setFeeCollector(address _feeCollector) external onlyOwner {
+    function setFeeCollector(address _feeCollector, uint256 _fee) external onlyOwner {
+        require(_fee <= 50);
         feeCollector = _feeCollector;
+        fee = _fee;
     }
 
     function _exit() internal override {
