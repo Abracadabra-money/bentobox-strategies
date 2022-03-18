@@ -6,9 +6,9 @@ import { wrappedDeploy } from "../utilities";
 const deployFunction: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
   const { deployer } = await hre.getNamedAccounts();
 
-  await wrappedDeploy("USTMiddleLayer", {
+  await wrappedDeploy("USTStrategyV2", {
     from: deployer,
-    args: [],
+    args: [deployer],
     log: true,
     deterministicDeployment: false,
   });
@@ -29,5 +29,5 @@ if (network.name !== "hardhat") {
     });
 }
 
-deployFunction.tags = ["USTMiddleLayer"];
+deployFunction.tags = ["USTStrategyV2"];
 deployFunction.dependencies = [];

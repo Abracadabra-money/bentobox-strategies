@@ -178,7 +178,7 @@ abstract contract BaseStrategy is IStrategy, Ownable {
 }
 
 
-contract USTStrategy is BaseStrategy {    
+contract USTStrategyV2 is BaseStrategy {    
     using SafeERC20 for IERC20;
 
     IAnchorRouter public constant router = IAnchorRouter(0xcEF9E167d3f8806771e9bac1d4a0d568c39a9388);
@@ -265,9 +265,12 @@ contract USTStrategy is BaseStrategy {
     function redeemEarnings() external onlyExecutor {
         uint256 balanceToKeep = IBentoBoxMinimal(bentoBox).strategyData(address(UST)).balance;
         uint256 exchangeRate = feeder.exchangeRateOf(address(UST), true);
-        uint256 liquid = UST.balanceOf(address(this);
+        uint256 liquid = UST.balanceOf(address(this));
         uint256 total = toUST(aUST.balanceOf(address(this)), exchangeRate) + liquid;
-        if (total > balanceToKeep) router.redeemStable(toAUST(total - keep - liquid, exchangeRate));
+        
+        if (total > balanceToKeep) {
+            router.redeemStable(toAUST(total - balanceToKeep - liquid, exchangeRate));
+        }
     }
 
     function safeDeposit(uint256 amount) external onlyExecutor {

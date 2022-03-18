@@ -61,7 +61,7 @@ contract USTMiddleLayer {
         if (total <= balanceToKeep || total - balanceToKeep <= 100 ether) {
             revert YieldNotHighEnough();
         }
-        strategy.safeWithdraw(total - keep - liquid);
+        strategy.safeWithdraw(total - balanceToKeep - liquid);
     }
 
     function toUST(uint256 amount, uint256 exchangeRate) public pure returns (uint256) {

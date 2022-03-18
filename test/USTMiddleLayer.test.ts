@@ -23,7 +23,7 @@ describe("USTMiddleLayer", async () => {
         {
           forking: {
             jsonRpcUrl: `https://eth-mainnet.alchemyapi.io/v2/${process.env.ALCHEMY_API_KEY}`,
-            blockNumber: 14349632,
+            blockNumber: 14410835,
           },
         },
       ],
@@ -54,11 +54,9 @@ describe("USTMiddleLayer", async () => {
     snapshotId = await ethers.provider.send("evm_snapshot", []);
   });
 
-  it("should redeem earnings on 20 minutes window", async function () {
+  it("should not be able to redeem if the profit isn't the minimum required", async function () {
     await USTMiddleLayer.redeemEarningsImproved()
-    await expect(USTMiddleLayer.redeemEarningsImproved()).to.be.revertedWith("RedeemingNotReady()");
-    await advanceTime(60 * 20); // 20 minutes
-    await expect(USTMiddleLayer.redeemEarningsImproved()).to.be.revertedWith("Operation: amount must be more than 10");
+    await expect(USTMiddleLayer.redeemEarningsImproved()).to.be.revertedWith("YieldNotHighEnough()");
   });
 
   it("should account earnings without reverting", async function () {
