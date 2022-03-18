@@ -182,7 +182,7 @@ contract USTStrategyV2 is BaseStrategy {
     using SafeERC20 for IERC20;
 
     IAnchorRouter public constant router = IAnchorRouter(0xcEF9E167d3f8806771e9bac1d4a0d568c39a9388);
-    IExchangeRateFeeder public feeder = IExchangeRateFeeder(0xB12B8247bD1749CC271c55Bb93f6BD2B485C94A7);
+    IExchangeRateFeeder public feeder = IExchangeRateFeeder(0x24a76073Ab9131b25693F3b75dD1ce996fd3116c);
     IERC20 public constant UST = IERC20(0xa47c8bf37f92aBed4A126BDA807A7b7498661acD);
     IERC20 public constant aUST = IERC20(0xa8De3e3c934e2A1BB08B010104CcaBBD4D6293ab);
     address private constant degenBox = 0xd96f48665a1410C0cd669A88898ecA36B9Fc2cce;
@@ -283,12 +283,16 @@ contract USTStrategyV2 is BaseStrategy {
         router.redeemStable(requested);
     }
 
+    function safeWithdrawFromAUST(uint256 amount) external onlyExecutor {
+        router.redeemStable(amount);
+    }
+
     function updateExchangeRateFeeder(IExchangeRateFeeder feeder_) external onlyOwner {
         feeder = feeder_;
     }
 
     function setFeeCollector(address _feeCollector, uint256 _fee) external onlyOwner {
-        require(_fee <= 50);
+        require(_fee <= 50, "max fee is 50");
         feeCollector = _feeCollector;
         fee = _fee;
     }
