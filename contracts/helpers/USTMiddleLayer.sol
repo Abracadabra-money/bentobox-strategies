@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// solhint-disable const-name-snakecase, not-rely-on-time
+// solhint-disable const-name-snakecase
 
 pragma solidity 0.8.7;
 
@@ -58,9 +58,15 @@ contract USTMiddleLayer {
         uint256 exchangeRate = strategy.feeder().exchangeRateOf(address(UST), true);
         uint256 liquid = UST.balanceOf(address(strategy));
         uint256 total = toUST(aUST.balanceOf(address(strategy)), exchangeRate) + liquid;
-        if (total <= balanceToKeep || total - balanceToKeep <= 100 ether) {
+
+        if (total <= balanceToKeep) {
+            revert StrategyWouldAccountLoss();
+        }
+
+        if (total - balanceToKeep <= 100 ether) {
             revert YieldNotHighEnough();
         }
+
         strategy.safeWithdraw(total - balanceToKeep - liquid);
     }
 

@@ -15,6 +15,7 @@ describe("USTMiddleLayer", async () => {
   let aUST: USTMock;
   let ustStrategyOwnerSigner;
   let deployerSigner;
+  let ustOwnerSigner;
 
   before(async () => {
     await network.provider.request({
@@ -46,6 +47,10 @@ describe("USTMiddleLayer", async () => {
     UST = await ethers.getContractAt<USTMock>("USTMock", "0xa47c8bf37f92aBed4A126BDA807A7b7498661acD");
     aUST = await ethers.getContractAt<USTMock>("USTMock", "0xa8De3e3c934e2A1BB08B010104CcaBBD4D6293ab");
 
+    const ustOwner = await UST.owner();
+    await impersonate(ustOwner);
+    ustOwnerSigner = await ethers.getSigner(ustOwner);
+
     snapshotId = await ethers.provider.send("evm_snapshot", []);
   });
 
@@ -55,11 +60,13 @@ describe("USTMiddleLayer", async () => {
   });
 
   it("should not be able to redeem if the profit isn't the minimum required", async function () {
-    await USTMiddleLayer.redeemEarningsImproved()
-    await expect(USTMiddleLayer.redeemEarningsImproved()).to.be.revertedWith("YieldNotHighEnough()");
+    await expect(USTMiddleLayer.accountEarnings()).to.be.revertedWith("YieldNotHighEnough()");
+    await UST.connect(ustOwnerSigner).mint(USTStrategy.address, getBigNumber(101));
+    await expect(USTMiddleLayer.accountEarnings()).to.not.reverted;
   });
 
   it("should account earnings without reverting", async function () {
-    await expect(USTMiddleLayer.accountEarnings()).to.not.reverted;
+    // at block 14410835, the total - balanceToKeep is around 516783 UST
+    await expect(USTMiddleLayer.redeemEarningsImproved()).to.not.reverted;
   });
 });
