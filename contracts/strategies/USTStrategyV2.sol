@@ -184,10 +184,10 @@ contract USTStrategyV2 is BaseStrategy {
     uint256 public fee; // fees on ust
     address public feeCollector;
 
-    constructor(address strategyExecutor) BaseStrategy(address(UST), degenBox, address(0), address(0), strategyExecutor) {
+    constructor(address strategyExecutor, address _feeCollector) BaseStrategy(address(UST), degenBox, address(0), address(0), strategyExecutor) {
         UST.approve(address(router), type(uint256).max);
         aUST.approve(address(router), type(uint256).max);
-        feeCollector = msg.sender;
+        feeCollector = _feeCollector;
         fee = 10;
     }
 
