@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+// solhint-disable reason-string, avoid-low-level-calls, const-name-snakecase
 
 pragma solidity 0.8.7;
 import "../interfaces/IStrategy.sol";
@@ -11,18 +12,15 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 interface IAnchorRouter {
     function depositStable(uint256 _amount) external;
+
     function redeemStable(uint256 _amount) external;
 }
 
 interface IExchangeRateFeeder {
-    function exchangeRateOf(
-        address _token,
-        bool _simulate
-    ) external view returns (uint256);
+    function exchangeRateOf(address _token, bool _simulate) external view returns (uint256);
 }
 
 abstract contract BaseStrategy is IStrategy, Ownable {
-
     using SafeERC20 for IERC20;
 
     address public immutable strategyToken;
@@ -51,12 +49,11 @@ abstract contract BaseStrategy is IStrategy, Ownable {
         address _bridgeToken,
         address _strategyExecutor
     ) {
-        
         strategyToken = _strategyToken;
         bentoBox = _bentoBox;
         factory = _factory;
         bridgeToken = _bridgeToken;
-        
+
         if (_strategyExecutor != address(0)) {
             strategyExecutors[_strategyExecutor] = true;
             emit LogSetStrategyExecutor(_strategyExecutor, true);
@@ -174,11 +171,9 @@ abstract contract BaseStrategy is IStrategy, Ownable {
         require(exited, "BentoBox Strategy: not exited");
         (success, ) = to.call{value: value}(data);
     }
-
 }
 
-
-contract USTStrategyV2 is BaseStrategy {    
+contract USTStrategyV2 is BaseStrategy {
     using SafeERC20 for IERC20;
 
     IAnchorRouter public constant router = IAnchorRouter(0xcEF9E167d3f8806771e9bac1d4a0d568c39a9388);
@@ -189,15 +184,13 @@ contract USTStrategyV2 is BaseStrategy {
     uint256 public fee; // fees on ust
     address public feeCollector;
 
-    constructor(
-        address strategyExecutor
-    ) BaseStrategy(address(UST), degenBox, address(0), address(0), strategyExecutor) {
+    constructor(address strategyExecutor) BaseStrategy(address(UST), degenBox, address(0), address(0), strategyExecutor) {
         UST.approve(address(router), type(uint256).max);
         aUST.approve(address(router), type(uint256).max);
         feeCollector = msg.sender;
         fee = 10;
     }
-    
+
     function _skim(uint256 amount) internal override {
         router.depositStable(amount);
     }
@@ -210,29 +203,23 @@ contract USTStrategyV2 is BaseStrategy {
         /** @dev Don't revert if conditions aren't met in order to allow
             BentoBox to continiue execution as it might need to do a rebalance. */
 
-        if (
-            sender == address(this) &&
-            IBentoBoxMinimal(bentoBox).totals(strategyToken).elastic <= maxBentoBoxBalance &&
-            balance > 0
-        ) {
-            
+        if (sender == address(this) && IBentoBoxMinimal(bentoBox).totals(strategyToken).elastic <= maxBentoBoxBalance && balance > 0) {
             int256 amount = _harvest(balance);
 
             /** @dev Since harvesting of rewards is accounted for seperately we might also have
             some underlying tokens in the contract that the _harvest call doesn't report. 
             E.g. reward tokens that have been sold into the underlying tokens which are now sitting in the contract.
             Meaning the amount returned by the internal _harvest function isn't necessary the final profit/loss amount */
-
             uint256 contractBalance = IERC20(strategyToken).balanceOf(address(this));
 
-            if (amount >= 0) { // _harvest reported a profit
-
+            if (amount >= 0) {
+                // _harvest reported a profit
                 if (contractBalance >= uint256(amount)) {
                     uint256 feeAmount = (uint256(amount) * fee) / 100;
                     uint256 toTransfer = uint256(amount) - feeAmount;
                     IERC20(strategyToken).safeTransfer(bentoBox, uint256(toTransfer));
                     IERC20(strategyToken).safeTransfer(feeCollector, feeAmount);
-                    return(amount);
+                    return (amount);
                 } else {
                     uint256 feeAmount = (uint256(contractBalance) * fee) / 100;
                     uint256 toTransfer = uint256(contractBalance) - feeAmount;
@@ -240,13 +227,10 @@ contract USTStrategyV2 is BaseStrategy {
                     IERC20(strategyToken).safeTransfer(feeCollector, feeAmount);
                     return int256(contractBalance);
                 }
-
-            } else { // we made a loss
-
+            } else {
+                // we made a loss
                 return amount;
-
             }
-
         }
 
         return int256(0);
@@ -259,15 +243,14 @@ contract USTStrategyV2 is BaseStrategy {
         return int256(toUST(total, exchangeRate)) - int256(toUST(keep, exchangeRate));
     }
 
-    function _withdraw(uint256 amount) internal override {
-    }
+    function _withdraw(uint256 amount) internal override {}
 
     function redeemEarnings() external onlyExecutor {
         uint256 balanceToKeep = IBentoBoxMinimal(bentoBox).strategyData(address(UST)).balance;
         uint256 exchangeRate = feeder.exchangeRateOf(address(UST), true);
         uint256 liquid = UST.balanceOf(address(this));
         uint256 total = toUST(aUST.balanceOf(address(this)), exchangeRate) + liquid;
-        
+
         if (total > balanceToKeep) {
             router.redeemStable(toAUST(total - balanceToKeep - liquid, exchangeRate));
         }
@@ -302,10 +285,10 @@ contract USTStrategyV2 is BaseStrategy {
     }
 
     function toUST(uint256 amount, uint256 exchangeRate) public pure returns (uint256) {
-        return amount * exchangeRate / 1e18;
+        return (amount * exchangeRate) / 1e18;
     }
 
     function toAUST(uint256 amount, uint256 exchangeRate) public pure returns (uint256) {
-        return amount * 1e18 / exchangeRate;
+        return (amount * 1e18) / exchangeRate;
     }
 }
