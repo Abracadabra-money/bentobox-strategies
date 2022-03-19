@@ -1,5 +1,11 @@
 ## Deployments
 
+### Ethereum
+| Contract       | Address                                    |
+| -------------- | ------------------------------------------ |
+| USTMIddleLayer | 0x0D2a5107435cbbBE21Db1ADB5F1E078E63e59449 |
+| USTStrategyV2  | 0xaF2fBB9CB80EdFb7d3f2d170a65AE3bFa42d0B86 |
+
 ### Avalanche - Joe Strategy
 
 | Contract           | Token address                              | Strategy Address                           |
