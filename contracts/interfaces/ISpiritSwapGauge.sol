@@ -16,4 +16,6 @@ interface ISpiritSwapGauge {
     function withdraw(uint256 amount) external;
 
     function balanceOf(address account) external view returns (uint256);
+
+    function notifyRewardAmount(uint256 reward) external;
 }

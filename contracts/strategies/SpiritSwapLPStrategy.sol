@@ -162,7 +162,7 @@ contract SpiritSwapLPStrategy is BaseStrategy {
     }
 
     function setFeeParameters(address _feeCollector, uint8 _feePercent) external onlyOwner {
-        if (feePercent < 100) {
+        if (feePercent > 100) {
             revert InvalidFeePercent();
         }
 

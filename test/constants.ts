@@ -12,6 +12,7 @@ export const Constants = {
         spiritFtmMimPair: "0xB32b31DfAfbD53E310390F641C7119b5B9Ea0488",
         spiritSwapInitHash: "0xe242e798f6cee26a9cb0bbf24653bf066e5356ffeac160907fe2cc108e238617",
         spiritFtmMimGauge: "0x0B905475bEa057060D066f3D1F85E6902Ae62557",
+        spiritGaugeProxy: "0x420b17f69618610DE18caCd1499460EFb29e1d8f",
         spiritRouter: "0x16327E3FbDaCA3bcF7E38F5Af2599D2DDc33aE52",
         spiritFactory: "0xEF45d134b73241eDa7703fa787148D9C9F4950b0",
     }

@@ -1,13 +1,13 @@
 /* eslint-disable prefer-const */
 import { ethers, network, deployments, getNamedAccounts } from "hardhat";
 import { expect } from "chai";
-import { BentoBoxV1, IERC20, ISpiritSwapGauge, SpiritSwapLPStrategy } from "../typechain";
+import { BentoBoxV1, ERC20Mock, IERC20, ISpiritSwapGauge, SpiritSwapLPStrategy } from "../typechain";
 import { advanceTime, getBigNumber, impersonate } from "../utilities";
 import { Constants } from "./constants";
 
 const degenBox = Constants.fantom.degenBox;
 const degenBoxOwner = Constants.fantom.degenBoxOwner;
-const spiritToken =  Constants.fantom.spîrit;
+const spiritToken = Constants.fantom.spîrit;
 const gauge = Constants.fantom.spiritFtmMimGauge;
 const ftmMimPair = Constants.fantom.spiritFtmMimPair;
 const ftmMimPairWhale = "0x9E05295a9a88FeFa61dE90422a708fF63878Cd6B";
@@ -17,11 +17,19 @@ describe("FTM/MIM LP DegenBox Strategy", async () => {
   let Strategy: SpiritSwapLPStrategy;
   let BentoBox: BentoBoxV1;
   let LpToken: IERC20;
-  let SpiritToken: IERC20;
+  let SpiritToken: ERC20Mock;
   let Gauge: ISpiritSwapGauge;
-  let initialStakedLpAmount;
   let deployerSigner;
+  let gaugeProxySigner;
   let aliceSigner;
+  let spiritTokenOwnerSigner;
+
+  const distributeReward = async (amount) => {
+    await SpiritToken.connect(spiritTokenOwnerSigner).mint(Constants.fantom.spiritGaugeProxy, amount);
+    await SpiritToken.connect(gaugeProxySigner).approve(Gauge.address, 0);
+    await SpiritToken.connect(gaugeProxySigner).approve(Gauge.address, amount);
+    await Gauge.connect(gaugeProxySigner).notifyRewardAmount(amount);
+  };
 
   before(async () => {
     await network.provider.request({
@@ -31,7 +39,7 @@ describe("FTM/MIM LP DegenBox Strategy", async () => {
           forking: {
             enabled: true,
             jsonRpcUrl: `https://rpc.ftm.tools/`,
-            blockNumber: 35233288,
+            blockNumber: 35300198,
           },
         },
       ],
@@ -41,18 +49,23 @@ describe("FTM/MIM LP DegenBox Strategy", async () => {
     const { deployer, alice } = await getNamedAccounts();
 
     await impersonate(degenBoxOwner);
+    await impersonate(Constants.fantom.spiritGaugeProxy);
 
     deployerSigner = await ethers.getSigner(deployer);
     aliceSigner = await ethers.getSigner(alice);
+    gaugeProxySigner = await ethers.getSigner(Constants.fantom.spiritGaugeProxy);
+
     const degenBoxOnwerSigner = await ethers.getSigner(degenBoxOwner);
 
     Strategy = await ethers.getContract("FTMMIMSpiritSwapLPStrategy");
     BentoBox = await ethers.getContractAt<BentoBoxV1>("BentoBoxV1", degenBox);
     Gauge = await ethers.getContractAt<ISpiritSwapGauge>("ISpiritSwapGauge", gauge);
     LpToken = await ethers.getContractAt<IERC20>("ERC20Mock", ftmMimPair);
-    SpiritToken = await ethers.getContractAt<IERC20>("ERC20Mock", spiritToken);
+    SpiritToken = await ethers.getContractAt<ERC20Mock>("ERC20Mock", spiritToken);
 
-    expect((await BentoBox.totals(LpToken.address)).elastic).to.equal(0);
+    const spiritTokenOwner = await SpiritToken.owner();
+    await impersonate(spiritTokenOwner);
+    spiritTokenOwnerSigner = await ethers.getSigner(spiritTokenOwner);
 
     // Transfer LPs from a holder to alice
     await impersonate(ftmMimPairWhale);
@@ -65,7 +78,8 @@ describe("FTM/MIM LP DegenBox Strategy", async () => {
     // Deposit into DegenBox
     await LpToken.connect(aliceSigner).approve(BentoBox.address, ethers.constants.MaxUint256);
     await BentoBox.connect(aliceSigner).deposit(LpToken.address, alice, alice, aliceLpAmount, 0);
-    expect((await BentoBox.totals(LpToken.address)).elastic).to.equal(aliceLpAmount);
+
+    const lpAmount = (await BentoBox.totals(LpToken.address)).elastic;
 
     BentoBox = BentoBox.connect(degenBoxOnwerSigner);
     await BentoBox.setStrategy(LpToken.address, Strategy.address);
@@ -73,15 +87,15 @@ describe("FTM/MIM LP DegenBox Strategy", async () => {
     await BentoBox.setStrategy(LpToken.address, Strategy.address);
     await BentoBox.setStrategyTargetPercentage(LpToken.address, 70);
 
-    // Initial Rebalance, calling skim to deposit to masterchef
+    // Initial Rebalance, calling skim to deposit to the gauge
     await Strategy.safeHarvest(ethers.constants.MaxUint256, true, 0, false);
     expect(await LpToken.balanceOf(Strategy.address)).to.equal(0);
     expect(await SpiritToken.balanceOf(Strategy.address)).to.eq(0);
 
     // verify if the lp has been deposited to the gauge
-    const amount = await Gauge.balanceOf(Strategy.address);
-    initialStakedLpAmount = aliceLpAmount.mul(70).div(100);
-    expect(amount).to.eq(initialStakedLpAmount);
+    const amountStaked = await Gauge.balanceOf(Strategy.address);
+    expect(amountStaked).to.eq(lpAmount.mul(70).div(100));
+
     snapshotId = await ethers.provider.send("evm_snapshot", []);
   });
 
@@ -94,7 +108,7 @@ describe("FTM/MIM LP DegenBox Strategy", async () => {
     let previousAmount = await SpiritToken.balanceOf(Strategy.address);
 
     for (let i = 0; i < 10; i++) {
-      await advanceTime(1210000);
+      await distributeReward(getBigNumber(9999));
       await Strategy.safeHarvest(ethers.constants.MaxUint256, false, 0, false);
       const amount = await SpiritToken.balanceOf(Strategy.address);
 
@@ -105,8 +119,6 @@ describe("FTM/MIM LP DegenBox Strategy", async () => {
 
   it("should be able to change the fee collector only by the owner", async () => {
     const [deployer, alice] = await ethers.getSigners();
-    expect(await Strategy.feeCollector()).to.eq(ethers.constants.AddressZero);
-
     await expect(Strategy.connect(alice).setFeeParameters(alice.address, 10)).to.revertedWith("Ownable: caller is not the owner");
     await expect(Strategy.connect(deployer).setFeeParameters(alice.address, 10));
 
@@ -117,7 +129,7 @@ describe("FTM/MIM LP DegenBox Strategy", async () => {
     const { deployer } = await getNamedAccounts();
     await Strategy.setFeeParameters(deployer, 10);
 
-    await advanceTime(1210000);
+    await distributeReward(getBigNumber(9999));
     await Strategy.safeHarvest(0, false, 0, false);
 
     const feeCollector = await Strategy.feeCollector();
@@ -137,7 +149,7 @@ describe("FTM/MIM LP DegenBox Strategy", async () => {
   });
 
   it("should avoid front running when minting lp", async () => {
-    await advanceTime(1210000);
+    await distributeReward(getBigNumber(9999));
     await Strategy.safeHarvest(0, false, 0, false);
     await expect(Strategy.swapToLP(getBigNumber(2, 14))).to.revertedWith("InsufficientAmountOut");
   });
@@ -145,9 +157,9 @@ describe("FTM/MIM LP DegenBox Strategy", async () => {
   it("should harvest harvest, mint lp and report a profit", async () => {
     const oldBentoBalance = (await BentoBox.totals(LpToken.address)).elastic;
 
-    await advanceTime(1210000);
+    await distributeReward(getBigNumber(9999));
     await Strategy.safeHarvest(0, false, 0, false); // harvest spirit
-    await Strategy.swapToLP(0); // mint new usdc/avax lp from harvest spirit
+    await Strategy.swapToLP(0); // mint new ftm/mimlp from harvest spirit
 
     // harvest spirit, report lp profit to bentobox
     await expect(Strategy.safeHarvest(0, false, 0, false)).to.emit(BentoBox, "LogStrategyProfit");
@@ -168,8 +180,9 @@ describe("FTM/MIM LP DegenBox Strategy", async () => {
     const oldBentoBalance = await LpToken.balanceOf(BentoBox.address);
 
     await advanceTime(1210000);
+    await distributeReward(getBigNumber(1));
     await Strategy.safeHarvest(0, false, 0, false); // harvest spirit
-    await Strategy.swapToLP(0); // mint new usdc/avax lp from harvest spirit
+    await Strategy.swapToLP(0); // mint new ftm/mimlp from harvest spirit
 
     await expect(BentoBox.setStrategy(LpToken.address, Strategy.address)).to.emit(BentoBox, "LogStrategyQueued");
     await advanceTime(1210000);
