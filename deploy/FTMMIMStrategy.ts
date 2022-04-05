@@ -1,20 +1,20 @@
 import { HardhatRuntimeEnvironment } from "hardhat/types";
 import { DeployFunction } from "hardhat-deploy/types";
-import { network, ethers } from "hardhat";
-import { Constants } from "../test/constants";
+import { network } from "hardhat";
+import { Constants, xMerlin } from "../test/constants";
+import { wrappedDeploy } from "../utilities";
+import { SpiritSwapLPStrategy } from "../typechain";
 
 const deployFunction: DeployFunction = async function (
   hre: HardhatRuntimeEnvironment
 ) {
-  const { deployments, getNamedAccounts } = hre;
-  const { deploy } = deployments;
-
+  const { getNamedAccounts } = hre;
   const { deployer } = await getNamedAccounts();
 
   const executor = deployer;
   const usePairToken0 = true; // Swap Spirit rewards to FTM to provide FTM/MIM liquidity
 
-  await deploy("FTMMIMSpiritSwapLPStrategy", {
+  const Strategy = await wrappedDeploy<SpiritSwapLPStrategy>("FTMMIMSpiritSwapLPStrategy", {
     from: deployer,
     args: [
       Constants.fantom.spiritFtmMimPair,
@@ -29,6 +29,11 @@ const deployFunction: DeployFunction = async function (
     deterministicDeployment: false,
     contract: "SpiritSwapLPStrategy"
   })
+
+  if (network.name !== "hardhat") {
+    await Strategy.transferOwnership(xMerlin);
+    await Strategy.setFeeParameters(xMerlin, 10);
+  }
 };
 
 export default deployFunction;
@@ -39,7 +44,7 @@ if(network.name !== "hardhat") {
     new Promise((resolve, reject) => {
       try {
         getChainId().then((chainId) => {
-          resolve(chainId !== "43114");
+          resolve(chainId !== "250");
         });
       } catch (error) {
         reject(error);
