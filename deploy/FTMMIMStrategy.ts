@@ -1,7 +1,7 @@
 import { HardhatRuntimeEnvironment } from "hardhat/types";
 import { DeployFunction } from "hardhat-deploy/types";
 import { network, ethers } from "hardhat";
-import { Contracts } from "../test/constants";
+import { Constants } from "../test/constants";
 
 const deployFunction: DeployFunction = async function (
   hre: HardhatRuntimeEnvironment
@@ -11,36 +11,23 @@ const deployFunction: DeployFunction = async function (
 
   const { deployer } = await getNamedAccounts();
 
-  const strategyToken = "0xa389f9430876455c36478deea9769b7ca4e3ddb1";   // AVAX/USDC
-  const degenBox = Contracts.fantom.degenBox;
-  const factory = "0x9Ad6C38BE94206cA50bb0d90783181662f0Cfa10"; // Joe Factory
-  const bridgeToken = ethers.constants.AddressZero;
   const executor = deployer;
-  const masterChef = "0xd6a4F121CA35509aF06A0Be99093d08462f53052"; // Joe MasterChefV2
-  const pid = 39; // MasterChefV2 AVAX/USDC pool id
-  const router = "0x60aE616a2155Ee3d9A68541Ba4544862310933d4"; // Joe Router
-  const rewardToken = "0x6e84a6216eA6dACC71eE8E6b0a5B7322EEbC0fDd"; // Joe Token
-  const usePairToken0 = false; // Swap Joe rewards to AVAX to provide AVAX/USDC liquidity. token0 is USDC, token1 is AVAX
-  const pairHashCode = "0x0bbca9af0511ad1a1da383135cf3a8d2ac620e549ef9f6ae3a4c33c2fed0af91"; // pair hash code for TraderJoe
+  const usePairToken0 = true; // Swap Spirit rewards to FTM to provide FTM/MIM liquidity
 
-  await deploy("AVAXUSDCStrategy", {
+  await deploy("FTMMIMSpiritSwapLPStrategy", {
     from: deployer,
     args: [
-      strategyToken,
-      degenBox,
-      factory,
-      bridgeToken,
+      Constants.fantom.spiritFtmMimPair,
+      Constants.fantom.degenBox,
+      Constants.fantom.spiritFactory,
       executor,
-      masterChef,
-      pid,
-      router,
-      rewardToken,
-      usePairToken0,
-      pairHashCode
+      Constants.fantom.spiritFtmMimGauge,
+      Constants.fantom.spîrit,
+      usePairToken0
     ],
     log: true,
     deterministicDeployment: false,
-    contract: "LPStrategy"
+    contract: "SpiritSwapLPStrategy"
   })
 };
 
@@ -60,5 +47,5 @@ if(network.name !== "hardhat") {
     });
 }
 
-deployFunction.tags = ["AVAXUSDCStrategy"];
+deployFunction.tags = ["FTMMIMSpiritSwapLPStrategy"];
 deployFunction.dependencies = [];

@@ -2,14 +2,19 @@
 
 pragma solidity 0.8.7;
 
-import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "@rari-capital/solmate/src/tokens/ERC20.sol";
+import "@rari-capital/solmate/src/utils/SafeTransferLib.sol";
+
 import "../BaseStrategy.sol";
 import "../interfaces/ISushiSwap.sol";
 import "../interfaces/ISpiritSwapGauge.sol";
 import "../libraries/Babylonian.sol";
 
 contract SpiritSwapLPStrategy is BaseStrategy {
-    using SafeERC20 for IERC20;
+    using SafeTransferLib for ERC20;
+
+    error InsufficientAmountOut();
+    error InvalidFeePercent();
 
     event LpMinted(uint256 total, uint256 strategyAmount, uint256 feeAmount);
 
@@ -48,29 +53,29 @@ contract SpiritSwapLPStrategy is BaseStrategy {
         feeCollector = _msgSender();
 
         (address token0, address token1) = _getPairTokens(_strategyToken);
-        IERC20(token0).safeApprove(address(ROUTER), type(uint256).max);
-        IERC20(token1).safeApprove(address(ROUTER), type(uint256).max);
-        IERC20(_strategyToken).safeApprove(address(_gauge), type(uint256).max);
+        ERC20(token0).safeApprove(address(ROUTER), type(uint256).max);
+        ERC20(token1).safeApprove(address(ROUTER), type(uint256).max);
+        ERC20(_strategyToken).safeApprove(address(_gauge), type(uint256).max);
 
         usePairToken0 = _usePairToken0;
         pairInputToken = _usePairToken0 ? token0 : token1;
     }
 
     function _skim(uint256 amount) internal override {
-        //masterchef.deposit(pid, amount);
+        gauge.deposit(amount);
     }
 
     function _harvest(uint256) internal override returns (int256) {
-        //masterchef.withdraw(pid, 0);
+        gauge.getReward();
         return int256(0);
     }
 
     function _withdraw(uint256 amount) internal override {
-        //masterchef.withdraw(pid, amount);
+        gauge.withdraw(amount);
     }
 
     function _exit() internal override {
-        //masterchef.emergencyWithdraw(pid);
+        gauge.withdrawAll();
     }
 
     function _getPairTokens(address _pairAddress) private pure returns (address token0, address token1) {
@@ -91,11 +96,11 @@ contract SpiritSwapLPStrategy is BaseStrategy {
 
         path[path.length - 1] = tokenOut;
 
-        uint256 amountIn = IERC20(path[0]).balanceOf(address(this));
+        uint256 amountIn = ERC20(path[0]).balanceOf(address(this));
         uint256[] memory amounts = UniswapV2Library.getAmountsOut(factory, amountIn, path, pairCodeHash);
         amountOut = amounts[amounts.length - 1];
 
-        IERC20(path[0]).safeTransfer(UniswapV2Library.pairFor(factory, path[0], path[1], pairCodeHash), amounts[0]);
+        ERC20(path[0]).safeTransfer(UniswapV2Library.pairFor(factory, path[0], path[1], pairCodeHash), amounts[0]);
         _swap(amounts, path, address(this));
     }
 
@@ -122,10 +127,10 @@ contract SpiritSwapLPStrategy is BaseStrategy {
         }
 
         uint256[] memory amounts = UniswapV2Library.getAmountsOut(factory, swapAmountIn, path, pairCodeHash);
-        IERC20(path[0]).safeTransfer(strategyToken, amounts[0]);
+        ERC20(path[0]).safeTransfer(strategyToken, amounts[0]);
         _swap(amounts, path, address(this));
 
-        uint256 amountStrategyLpBefore = IERC20(strategyToken).balanceOf(address(this));
+        uint256 amountStrategyLpBefore = ERC20(strategyToken).balanceOf(address(this));
 
         // Minting liquidity with optimal token balances but is still leaving some
         // dust because of rounding. The dust will be used the next time the function
@@ -133,26 +138,34 @@ contract SpiritSwapLPStrategy is BaseStrategy {
         ROUTER.addLiquidity(
             token0,
             token1,
-            IERC20(token0).balanceOf(address(this)),
-            IERC20(token1).balanceOf(address(this)),
+            ERC20(token0).balanceOf(address(this)),
+            ERC20(token1).balanceOf(address(this)),
             1,
             1,
             address(this),
             type(uint256).max
         );
 
-        uint256 total = IERC20(strategyToken).balanceOf(address(this)) - amountStrategyLpBefore;
-        require(total >= amountOutMin, "INSUFFICIENT_AMOUNT_OUT");
+        uint256 total = ERC20(strategyToken).balanceOf(address(this)) - amountStrategyLpBefore;
+        if (total < amountOutMin) {
+            revert InsufficientAmountOut();
+        }
 
         uint256 feeAmount = (total * feePercent) / 100;
-        amountOut = total - feeAmount;
 
-        IERC20(strategyToken).safeTransfer(feeCollector, feeAmount);
+        if (feeAmount > 0) {
+            amountOut = total - feeAmount;
+            ERC20(strategyToken).safeTransfer(feeCollector, feeAmount);
+        }
+
         emit LpMinted(total, amountOut, feeAmount);
     }
 
     function setFeeParameters(address _feeCollector, uint8 _feePercent) external onlyOwner {
-        require(feePercent <= 100, "invalid feePercent");
+        if (feePercent < 100) {
+            revert InvalidFeePercent();
+        }
+
         feeCollector = _feeCollector;
         feePercent = _feePercent;
     }
