@@ -6,6 +6,7 @@ export const Constants = {
     bsc: {
         degenBox: "0x090185f2135308bad17527004364ebcc2d37e5f6",
         pancakeSwap: {
+            cake: "0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82",
             cakePool: "0x45c54210128a065de780C4B0Df3d16664f7f859e",
         }
     },

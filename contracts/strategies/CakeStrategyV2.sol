@@ -14,7 +14,9 @@ contract CakeStrategyV2 is BaseStrategy {
     event LpMinted(uint256 total, uint256 strategyAmount, uint256 feeAmount);
     ICakePool private immutable cakePool;
 
-    uint256 public depositAmount;
+    uint256 public constant NO_LOCKTIME = 0;
+
+    uint256 public totalDepositAmount;
     uint256 public fee; // fees on rewards
     address public feeCollector;
 
@@ -41,36 +43,38 @@ contract CakeStrategyV2 is BaseStrategy {
     }
 
     function _skim(uint256 amount) internal override {
-        cakePool.deposit(amount, 0);
-        (depositAmount, , , , , , , , ) = cakePool.userInfo(address(this));
+        totalDepositAmount += amount;
+        cakePool.deposit(amount, NO_LOCKTIME);
     }
 
     function _harvest(uint256) internal override returns (int256) {
         /// @dev CakePool auto compound reward and increase share price in CAKE.
-        /// Withdraw the accumulated amount instead.
-        uint256 withdrawFee = cakePool.calculateWithdrawFee(address(this), depositAmount);
-        uint256 currentAmount = cakePool.getPricePerFullShare() * depositAmount;
-        require(currentAmount - withdrawFee >= depositAmount, "not profitable");
+        /// Withdraw everything and deposit back the original amount.
+        cakePool.withdrawAll();
+        uint256 balance = IERC20(strategyToken).balanceOf(address(this));
 
-        // only withdraw the rewards
-        cakePool.withdrawByAmount(currentAmount - depositAmount);
-        uint256 total = IERC20(strategyToken).balanceOf(address(this));
-        uint256 feeAmount = (total * fee) / 100;
+        if (balance > totalDepositAmount) {
+            uint256 rewards = balance - totalDepositAmount;
+            uint256 feeAmount = (rewards * fee) / 100;
+            IERC20(strategyToken).safeTransfer(feeCollector, feeAmount);
+        }
+        // In case the balance is less than totalDepositAmount;
+        else {
+            totalDepositAmount = balance;
+        }
 
-        IERC20(strategyToken).safeTransfer(feeCollector, feeAmount);
-
-        (depositAmount, , , , , , , , ) = cakePool.userInfo(address(this));
+        cakePool.deposit(totalDepositAmount, NO_LOCKTIME);
         return int256(0);
     }
 
     function _withdraw(uint256 amount) internal override {
-        cakePool.withdraw(amount);
-        (depositAmount, , , , , , , , ) = cakePool.userInfo(address(this));
+        totalDepositAmount -= amount;
+        cakePool.withdrawByAmount(amount);
     }
 
     function _exit() internal override {
+        totalDepositAmount = 0;
         cakePool.withdrawAll();
-        depositAmount = 0;
     }
 
     function setFeeCollector(address _feeCollector, uint256 _fee) external onlyOwner {

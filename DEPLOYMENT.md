@@ -33,9 +33,10 @@
 
 ### BSC - PancakeSwap Strategies
 
-| Contract      | Token address                              | Strategy Address                           |
-| ------------- | ------------------------------------------ | ------------------------------------------ |
-| Cake strategy | 0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82 | 0x08B918dD18E087893bb9d711d9E0BBaA7a63Ef63 |
+| Contract                   | Token address                              | Strategy Address                           |
+| -------------------------- | ------------------------------------------ | ------------------------------------------ |
+| Cake strategy (deprecated) | 0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82 | 0x08B918dD18E087893bb9d711d9E0BBaA7a63Ef63 |
+| Cake strategyV2            | 0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82 | 0x6171619B5793099F8C577fe5dFC08ceA35a3B3Aa |
 
 ## Avalanche - Popsicle Dynamic LP Strategies
 
