@@ -3,6 +3,13 @@ export const xCalibur = "0xfB3485c2e209A5cfBDC1447674256578f1A80eE3";
 export const PopsicleMultisig = "0x7dc4eA80fE36788f393b5705909F7f0aAc305a86";
 
 export const Constants = {
+    bsc: {
+        degenBox: "0x090185f2135308bad17527004364ebcc2d37e5f6",
+        pancakeSwap: {
+            cake: "0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82",
+            cakePool: "0x45c54210128a065de780C4B0Df3d16664f7f859e",
+        }
+    },
     fantom: {
         degenBox: "0x74A0BcA2eeEdf8883cb91E37e9ff49430f20a616",
         degenBoxOwner: "0x3d995ECE005E9789C22acB1e359Ff615FbdD96ba",

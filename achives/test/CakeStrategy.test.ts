@@ -1,28 +1,38 @@
 /* eslint-disable prefer-const */
-import { ethers, network, deployments, getNamedAccounts, artifacts } from "hardhat";
+import { ethers, network, deployments, getNamedAccounts } from "hardhat";
 import { expect } from "chai";
-import { BigNumberish } from "ethers";
 
-import { BentoBoxV1, IERC20, IExchangeRateFeeder, IMasterChef, IUniswapV2Pair, LPStrategy, USTMock, USTStrategy } from "../typechain";
-import { advanceTime, blockNumber, getBigNumber, impersonate } from "../utilities";
+import { BentoBoxV1, ICakePool, ERC20Mock, CakeStrategyV2 } from "../typechain";
+import { advanceTime, duration, getBigNumber, impersonate } from "../utilities";
+import { Constants } from "./constants";
 
-const degenBox = "0x090185f2135308BaD17527004364eBcC2D37e5F6";
+const degenBox = Constants.bsc.degenBox;
 const degenBoxOwner = "0xfddfE525054efaAD204600d00CA86ADb1Cc2ea8a";
-const cakeToken = "0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82";
-const masterChef = "0x73feaa1eE314F8c655E354234017bE2193C9E24E";
+const cakeToken = Constants.bsc.pancakeSwap.cake;
+const cakePool = Constants.bsc.pancakeSwap.cakePool;
 
 // Transfer LPs from a holder to alice
 const cakeWhale = "0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82";
 
-describe("Cake DegenBox Strategy", async () => {
+describe("Cake DegenBox Strategy V2", async () => {
   let snapshotId;
-  let Strategy: LPStrategy;
+  let Strategy: CakeStrategyV2;
   let BentoBox: BentoBoxV1;
-  let CakeToken: IERC20;
-  let MasterChef: IMasterChef;
+  let CakeToken: ERC20Mock;
+  let CakePool: ICakePool;
   let initialStakedAmount;
   let deployerSigner;
   let aliceSigner;
+
+  const addRewards = async(amount) => {
+    const owner = await CakeToken.owner(); 
+    await impersonate(owner);
+    const signer = await ethers.getSigner(owner);
+    const before = await CakePool.balanceOf();
+    await CakeToken.connect(signer).transfer(CakePool.address, amount);
+    expect((await CakePool.balanceOf()).sub(before)).to.eq(amount);
+    await advanceTime(1210000);
+  };
 
   before(async () => {
     await network.provider.request({
@@ -32,7 +42,7 @@ describe("Cake DegenBox Strategy", async () => {
           forking: {
             enabled: true,
             jsonRpcUrl: process.env.BSC_RPC_URL,
-            blockNumber: 12822488,
+            blockNumber: 17318335,
           },
         },
       ],
@@ -47,10 +57,10 @@ describe("Cake DegenBox Strategy", async () => {
     aliceSigner = await ethers.getSigner(alice);
     const degenBoxOnwerSigner = await ethers.getSigner(degenBoxOwner);
 
-    Strategy = await ethers.getContract("CakeStrategy");
+    Strategy = await ethers.getContract("CakeStrategyV2");
     BentoBox = await ethers.getContractAt<BentoBoxV1>("BentoBoxV1", degenBox);
-    MasterChef = await ethers.getContractAt<IMasterChef>("IMasterChef", masterChef);
-    CakeToken = await ethers.getContractAt<IERC20>("ERC20Mock", cakeToken);
+    CakePool = await ethers.getContractAt<ICakePool>("ICakePool", cakePool);
+    CakeToken = await ethers.getContractAt<ERC20Mock>("ERC20Mock", cakeToken);
 
     await impersonate(cakeWhale);
     const cakeWhaleSigner = await ethers.getSigner(cakeWhale);
@@ -63,23 +73,26 @@ describe("Cake DegenBox Strategy", async () => {
     const balanceBefore = (await BentoBox.totals(CakeToken.address)).elastic;
     await CakeToken.connect(aliceSigner).approve(BentoBox.address, ethers.constants.MaxUint256);
     await BentoBox.connect(aliceSigner).deposit(CakeToken.address, alice, alice, aliceCakeAmount, 0);
-    const bentoBoxCakeAmount = (await BentoBox.totals(CakeToken.address)).elastic;
+    let bentoBoxCakeAmount = (await BentoBox.totals(CakeToken.address)).elastic;
     expect(bentoBoxCakeAmount.sub(balanceBefore)).to.equal(aliceCakeAmount);
 
     BentoBox = BentoBox.connect(degenBoxOnwerSigner);
     await BentoBox.setStrategy(CakeToken.address, Strategy.address);
     await advanceTime(1210000);
     await BentoBox.setStrategy(CakeToken.address, Strategy.address);
+
+    bentoBoxCakeAmount = (await BentoBox.totals(CakeToken.address)).elastic;
     await BentoBox.setStrategyTargetPercentage(CakeToken.address, 70);
 
-    // Initial Rebalance, calling skim to deposit to masterchef
+    // Initial Rebalance, calling skim to deposit to cakepool
     await Strategy.safeHarvest(ethers.constants.MaxUint256, true, 0, false);
     expect(await CakeToken.balanceOf(Strategy.address)).to.equal(0);
 
-    // verify if the cakes has been deposited to masterchef
-    const amount = (await MasterChef.userInfo(0, Strategy.address)).amount;
+    // verify if the cakes has been deposited to cakepool
+    const { cakeAtLastUserAction } = (await CakePool.userInfo(Strategy.address));
     initialStakedAmount = bentoBoxCakeAmount.mul(70).div(100);
-    expect(amount).to.eq(initialStakedAmount);
+    expect(await Strategy.totalDepositAmount()).to.eq(initialStakedAmount);
+    expect(cakeAtLastUserAction).to.be.closeTo(initialStakedAmount, 1);
     snapshotId = await ethers.provider.send("evm_snapshot", []);
   });
 
@@ -91,16 +104,17 @@ describe("Cake DegenBox Strategy", async () => {
   it("should be able to change the fee collector only my the owner", async () => {
     expect(await Strategy.feeCollector()).to.eq(await Strategy.owner());
 
-    await expect(Strategy.connect(aliceSigner).setFeeCollector(aliceSigner.address)).to.revertedWith("Ownable: caller is not the owner");
-    await expect(Strategy.connect(deployerSigner).setFeeCollector(aliceSigner.address));
+    await expect(Strategy.connect(aliceSigner).setFeeCollector(aliceSigner.address, 0)).to.revertedWith("Ownable: caller is not the owner");
+    await expect(Strategy.connect(deployerSigner).setFeeCollector(aliceSigner.address, 11));
 
     expect(await Strategy.feeCollector()).to.eq(aliceSigner.address);
+    expect(await Strategy.fee()).to.eq(11);
   });
 
   it("should harvest and report a profit", async () => {
     const oldBentoBalance = (await BentoBox.totals(CakeToken.address)).elastic;
 
-    await advanceTime(1210000);
+    await addRewards(getBigNumber(1000));
 
     // harvest cake, report profit to bentobox
     await expect(Strategy.safeHarvest(0, false, 0, false)).to.emit(BentoBox, "LogStrategyProfit");
