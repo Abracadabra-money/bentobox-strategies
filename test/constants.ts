@@ -29,13 +29,14 @@ export const Constants = {
     mim: "0x99D8a9C45b2ecA8864373A26D1459e3Dff1e17F3",
     spell: "0x090185f2135308BaD17527004364eBcC2D37e5F6",
     ust: "0xa47c8bf37f92aBed4A126BDA807A7b7498661acD",
-    usdc: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
-    usdt: "0xdac17f958d2ee523a2206206994597c13d831ec7",
+    usdc: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+    usdt: "0xdAC17F958D2ee523a2206206994597C13D831ec7",
     stargate: {
       stg: "0xAf5191B0De278C7286d6C7CC6ab6BB8A73bA2Cd6",
       router: "0x8731d54E9D02c286767d56ac03e8037C07e01e98",
       usdcPool: "0xdf0770dF86a8034b3EFEf0A1Bb3c889B8332FF56",
       usdtPool: "0x38EA452219524Bb87e18dE1C24D3bB59510BD783",
+      staking: "0xB0D502E938ed5f4df2E681fE6E419ff29631d62b",
     },
     curve: {
       mim3Crv: "0x5a6A4D54456819380173272A5E8E9B9904BdF41B",
@@ -51,6 +52,7 @@ export const Constants = {
       router: "0x53Bf833A5d6c4ddA888F69c22C88C9f356a41614",
       usdcPool: "0x892785f33CdeE22A30AEF750F285E18c18040c3e",
       usdtPool: "0xB6CfcF89a7B22988bfC96632aC2A9D6daB60d641",
+      staking: "0xeA8DfEE1898a7e0a59f7527F076106d7e44c2176",
     },
     curve: {
       mim2crvPool: "0x30dF229cefa463e991e29D42DB0bae2e122B2AC7",
@@ -73,6 +75,7 @@ export const Constants = {
       router: "0x45A01E4e04F14f7A4a6702c74187c5F6222033cd",
       usdcPool: "0x1205f31718499dBf1fCa446663B532Ef87481fe1",
       usdtPool: "0x29e38769f23701A2e4A8Ef0492e19dA4604Be62c",
+      staking: "0x8731d54E9D02c286767d56ac03e8037C07e01e98",
     },
   },
 };
