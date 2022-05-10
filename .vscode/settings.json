@@ -14,5 +14,16 @@
   "typescript.updateImportsOnFileMove.enabled": "never",
   "javascript.updateImportsOnFileMove.enabled": "never",
   "solidity.defaultCompiler": "remote",
-  "eslint.validate": ["javascript"],
+  "eslint.validate": [
+    "javascript"
+  ],
+  "files.exclude": {
+    "**/.git": true,
+    "**/.svn": true,
+    "**/.hg": true,
+    "**/CVS": true,
+    "**/.DS_Store": true,
+    "**/Thumbs.db": true,
+    "**/node_modules": true
+  },
 }
