@@ -14,5 +14,7 @@
   "typescript.updateImportsOnFileMove.enabled": "never",
   "javascript.updateImportsOnFileMove.enabled": "never",
   "solidity.defaultCompiler": "remote",
-  "eslint.validate": ["javascript"],
+  "eslint.validate": [
+    "javascript"
+  ]
 }
