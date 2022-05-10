@@ -37,6 +37,10 @@ export const Constants = {
       usdcPool: "0xdf0770dF86a8034b3EFEf0A1Bb3c889B8332FF56",
       usdtPool: "0x38EA452219524Bb87e18dE1C24D3bB59510BD783",
       staking: "0xB0D502E938ed5f4df2E681fE6E419ff29631d62b",
+      usdcStakingPid: 0,
+      usdtStakingPid: 1,
+      usdcPoolId: 1,
+      usdtPoolId: 2,
     },
     curve: {
       mim3Crv: "0x5a6A4D54456819380173272A5E8E9B9904BdF41B",
