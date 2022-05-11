@@ -2,12 +2,16 @@
 
 ### Ethereum
 
-| Contract                      | Address                                    |
-| ----------------------------- | ------------------------------------------ |
-| USTMiddleLayer                | 0x0D2a5107435cbbBE21Db1ADB5F1E078E63e59449 |
-| USTStrategyV3                 | 0x9CD243E5200B290F10d74D93E0CA6C9e51B3d664 |
-| MainnetUsdcStargateLPStrategy | 0x8439Ac976aC597C71C0512D8a53697a39E8F9773 |
-| MainnetUsdtStargateLPStrategy | 0x86130Dac04869a8201c7077270C10f3AFaba1c82 |
+| Contract                        | Address                                    |
+| ------------------------------- | ------------------------------------------ |
+| USTMiddleLayer                  | 0x0D2a5107435cbbBE21Db1ADB5F1E078E63e59449 |
+| USTStrategyV3                   | 0x9CD243E5200B290F10d74D93E0CA6C9e51B3d664 |
+| MainnetUsdcStargateLPStrategy   | 0x8439Ac976aC597C71C0512D8a53697a39E8F9773 |
+| MainnetUsdtStargateLPStrategy   | 0x86130Dac04869a8201c7077270C10f3AFaba1c82 |
+| AvalancheUsdcStargateLPStrategy | TBD                                        |
+| AvalancheUsdtStargateLPStrategy | TBD                                        |
+| ArbitrumUsdcStargateLPStrategy  | TBD                                        |
+| ArbitrumeUsdtStargateLPStrategy | TBD                                        |
 
 ### Avalanche - Joe Strategy
 

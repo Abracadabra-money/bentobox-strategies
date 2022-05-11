@@ -57,6 +57,10 @@ export const Constants = {
       usdcPool: "0x892785f33CdeE22A30AEF750F285E18c18040c3e",
       usdtPool: "0xB6CfcF89a7B22988bfC96632aC2A9D6daB60d641",
       staking: "0xeA8DfEE1898a7e0a59f7527F076106d7e44c2176",
+      usdcStakingPid: 0,
+      usdtStakingPid: 1,
+      usdcPoolId: 1,
+      usdtPoolId: 2,
     },
     curve: {
       mim2crvPool: "0x30dF229cefa463e991e29D42DB0bae2e122B2AC7",
@@ -80,6 +84,10 @@ export const Constants = {
       usdcPool: "0x1205f31718499dBf1fCa446663B532Ef87481fe1",
       usdtPool: "0x29e38769f23701A2e4A8Ef0492e19dA4604Be62c",
       staking: "0x8731d54E9D02c286767d56ac03e8037C07e01e98",
+      usdcStakingPid: 0,
+      usdtStakingPid: 1,
+      usdcPoolId: 1,
+      usdtPoolId: 2,
     },
   },
 };

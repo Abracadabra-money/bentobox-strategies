@@ -1,17 +1,15 @@
 /* eslint-disable prefer-const */
 import forEach from "mocha-each";
-import { ethers, network, deployments, getNamedAccounts } from "hardhat";
+import hre, { ethers, network, deployments, getNamedAccounts } from "hardhat";
 import { expect } from "chai";
 
 import { BentoBoxV1, ERC20Mock, ILPStaking, BaseStargateLPStrategy } from "../typechain";
-import { advanceTime, getBigNumber, impersonate } from "../utilities";
+import { advanceTime, ChainId, getBigNumber, impersonate } from "../utilities";
 import { Constants } from "./constants";
 
-const degenBox = Constants.mainnet.degenBox;
-
 const cases = [
-  ["Stargate USDC", "MainnetUsdcStargateLPStrategy", "0xe85070bf5b50ec06ef31ab0ed3db284649d872b8"],
-  ["Stargate USDT", "MainnetUsdtStargateLPStrategy", "0x99459A327E2e1f7535501AFF6A1Aada7024C45FD"],
+  ["Stargate USDC", "ArbitrumUsdcStargateLPStrategy", "0x9cd50907aeb5d16f29bddf7e1abb10018ee8717d"],
+  ["Stargate USDT", "ArbitrumUsdtStargateLPStrategy", "0x9cd50907aeb5d16f29bddf7e1abb10018ee8717d"],
 ];
 
 forEach(cases).describe(
@@ -37,17 +35,18 @@ forEach(cases).describe(
       params: [
         {
           forking: {
-            jsonRpcUrl: `https://eth-mainnet.alchemyapi.io/v2/${process.env.ALCHEMY_API_KEY}`,
-            blockNumber: 14745900,
+            jsonRpcUrl: process.env.ARBITRUM_RPC_URL,
+            blockNumber: 11542332,
           },
         },
       ],
     });
 
-    await deployments.fixture(["MainnetStargateStrategies"]);
+    hre.getChainId = () => Promise.resolve(ChainId.Arbitrum.toString());
+    await deployments.fixture(["StargateStrategies"]);
     const { deployer, alice } = await getNamedAccounts();
 
-    BentoBox = await ethers.getContractAt<BentoBoxV1>("BentoBoxV1", degenBox);
+    BentoBox = await ethers.getContractAt<BentoBoxV1>("BentoBoxV1", Constants.arbitrum.degenBox);
 
     const degenBoxOwner = await BentoBox.owner();
     await impersonate(degenBoxOwner);
