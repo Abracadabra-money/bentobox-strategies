@@ -8,10 +8,10 @@
 | USTStrategyV3                   | 0x9CD243E5200B290F10d74D93E0CA6C9e51B3d664 |
 | MainnetUsdcStargateLPStrategy   | 0x8439Ac976aC597C71C0512D8a53697a39E8F9773 |
 | MainnetUsdtStargateLPStrategy   | 0x86130Dac04869a8201c7077270C10f3AFaba1c82 |
-| AvalancheUsdcStargateLPStrategy | TBD                                        |
-| AvalancheUsdtStargateLPStrategy | TBD                                        |
-| ArbitrumUsdcStargateLPStrategy  | TBD                                        |
-| ArbitrumeUsdtStargateLPStrategy | TBD                                        |
+| AvalancheUsdcStargateLPStrategy |                                            |
+| AvalancheUsdtStargateLPStrategy |                                            |
+| ArbitrumUsdcStargateLPStrategy  | 0x12ea786c9e53C5740feF04EfD568e69D6e9f3e98 |
+| ArbitrumeUsdtStargateLPStrategy | 0xd076F5426bD1F4cEE4054aBA60331Fa1d075dC49 |
 
 ### Avalanche - Joe Strategy
 

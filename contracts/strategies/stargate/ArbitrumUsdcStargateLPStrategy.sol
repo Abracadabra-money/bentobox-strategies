@@ -7,7 +7,7 @@ import "../../interfaces/balancer/IBalancerVault.sol";
 
 contract ArbitrumUsdcStargateLPStrategy is BaseStargateLPStrategy {
     IBalancerVault public constant VAULT = IBalancerVault(0xBA12222222228d8Ba445958a75a0704d566BF2C8);
-    address public constant USDC = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
+    address public constant USDC = 0xFF970A61A04b1cA14834A43f5dE4533eBDDB5CC8;
 
     constructor(
         address _strategyToken,
@@ -20,12 +20,10 @@ contract ArbitrumUsdcStargateLPStrategy is BaseStargateLPStrategy {
         IStargateToken(_staking.stargate()).approve(address(VAULT), type(uint256).max);
     }
 
-    function _swapToUnderlying() internal override {
-        uint256 stgBalance = stargateToken.balanceOf(address(this));
-
+    function _swapToUnderlying(uint256 stgBalance) internal override {
         IBalancerVault.BatchSwapStep[] memory swaps = new IBalancerVault.BatchSwapStep[](1);
         swaps[0] = IBalancerVault.BatchSwapStep({
-            poolId: hex"3a4c6d2404b5eb14915041e01f63200a82f4a343000200000000000000000065", // STG/USDC PoolId
+            poolId: 0x3a4c6d2404b5eb14915041e01f63200a82f4a343000200000000000000000065, // STG/USDC PoolId
             assetInIndex: 0,
             assetOutIndex: 1,
             amount: stgBalance,

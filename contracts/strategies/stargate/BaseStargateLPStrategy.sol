@@ -49,7 +49,7 @@ abstract contract BaseStargateLPStrategy is BaseStrategy {
 
         _underlyingToken.safeApprove(address(_router), type(uint256).max);
         underlyingToken = _underlyingToken;
-        
+
         ERC20(_strategyToken).safeApprove(address(_staking), type(uint256).max);
     }
 
@@ -71,11 +71,13 @@ abstract contract BaseStargateLPStrategy is BaseStrategy {
     }
 
     function swapToLP(uint256 amountOutMin) public onlyExecutor returns (uint256 amountOut) {
+        uint256 stgBalance = stargateToken.balanceOf(address(this));
+
         // Current Stargate LP Amount
         uint256 amountStrategyLpBefore = ERC20(strategyToken).balanceOf(address(this));
 
         // STG -> Pool underlying Token (USDT, USDC...)
-        _swapToUnderlying();
+        _swapToUnderlying(stgBalance);
 
         // Pool underlying Token in this contract
         uint256 underlyingTokenAmount = underlyingToken.balanceOf(address(this));
@@ -102,5 +104,5 @@ abstract contract BaseStargateLPStrategy is BaseStrategy {
         emit FeeParametersChanged(_feeCollector, _feePercent);
     }
 
-    function _swapToUnderlying() internal virtual;
+    function _swapToUnderlying(uint256 stgBalance) internal virtual;
 }

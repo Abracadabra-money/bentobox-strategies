@@ -74,11 +74,13 @@ const deployFunction: DeployFunction = async function (hre: HardhatRuntimeEnviro
 
   if (network.name !== "hardhat") {
     if ((await UsdcStargateLPStrategy.owner()) != xMerlin) {
-      await (await UsdcStargateLPStrategy.setStrategyExecutor(xMerlin)).wait();
+      await (await UsdcStargateLPStrategy.setFeeParameters(xMerlin, 10)).wait();
+      await (await UsdcStargateLPStrategy.setStrategyExecutor(xMerlin, true)).wait();
       await (await UsdcStargateLPStrategy.transferOwnership(xMerlin)).wait();
     }
     if ((await UsdtStargateLPStrategy.owner()) != xMerlin) {
-      await (await UsdtStargateLPStrategy.setStrategyExecutor(xMerlin)).wait();
+      await (await UsdtStargateLPStrategy.setFeeParameters(xMerlin, 10)).wait();
+      await (await UsdtStargateLPStrategy.setStrategyExecutor(xMerlin, true)).wait();
       await (await UsdtStargateLPStrategy.transferOwnership(xMerlin)).wait();
     }
   } else {
@@ -94,7 +96,7 @@ if (network.name !== "hardhat") {
     new Promise((resolve, reject) => {
       try {
         getChainId().then((chainId) => {
-          resolve(chainId !== "1");
+          resolve(chainId !== "42161");
         });
       } catch (error) {
         reject(error);

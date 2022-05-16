@@ -25,9 +25,9 @@ contract MainnetUsdtStargateLPStrategy is BaseStargateLPStrategy {
         USDC.approve(address(THREEPOOL), type(uint256).max);
     }
 
-    function _swapToUnderlying() internal override {
+    function _swapToUnderlying(uint256 stgBalance) internal override {
         // STG -> USDC
-        STGPOOL.exchange(0, 1, stargateToken.balanceOf(address(this)), 0);
+        STGPOOL.exchange(0, 1, stgBalance, 0);
 
         // USDC -> USDT
         THREEPOOL.exchange(1, 2, USDC.balanceOf(address(this)), 0);
