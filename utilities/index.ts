@@ -1,7 +1,7 @@
 import { ParamType } from "@ethersproject/abi";
 import { BigNumber, Contract } from "ethers";
 import hre, { ethers, network } from "hardhat";
-import { DeployOptions } from "hardhat-deploy/types";
+import { DeployFunction, DeployOptions } from "hardhat-deploy/types";
 
 export const BASE_TEN = 10;
 
@@ -69,5 +69,20 @@ export enum ChainId {
   Avalanche = 43114,
   Boba = 288,
 }
+
+export const setDeploymentSupportedChains = (supportedChains: string[], deployFunction: DeployFunction) => {
+  if (network.name !== "hardhat" || process.env.HARDHAT_LOCAL_NODE) {
+    deployFunction.skip = ({ getChainId }) =>
+      new Promise(async (resolve, reject) => {
+        try {
+          getChainId().then((chainId) => {
+            resolve(supportedChains.indexOf(chainId.toString()) === -1);
+          });
+        } catch (error) {
+          reject(error);
+        }
+      });
+  }
+};
 
 export * from "./time";

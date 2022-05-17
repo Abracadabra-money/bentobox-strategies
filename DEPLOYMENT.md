@@ -2,16 +2,23 @@
 
 ### Ethereum
 
-| Contract                        | Address                                    |
-| ------------------------------- | ------------------------------------------ |
-| USTMiddleLayer                  | 0x0D2a5107435cbbBE21Db1ADB5F1E078E63e59449 |
-| USTStrategyV3                   | 0x9CD243E5200B290F10d74D93E0CA6C9e51B3d664 |
-| MainnetUsdcStargateLPStrategy   | 0x8439Ac976aC597C71C0512D8a53697a39E8F9773 |
-| MainnetUsdtStargateLPStrategy   | 0x86130Dac04869a8201c7077270C10f3AFaba1c82 |
-| AvalancheUsdcStargateLPStrategy |                                            |
-| AvalancheUsdtStargateLPStrategy |                                            |
-| ArbitrumUsdcStargateLPStrategy  | 0x12ea786c9e53C5740feF04EfD568e69D6e9f3e98 |
-| ArbitrumeUsdtStargateLPStrategy | 0xd076F5426bD1F4cEE4054aBA60331Fa1d075dC49 |
+| Contract                         | Address                                    |
+| -------------------------------- | ------------------------------------------ |
+| USTMiddleLayer                   | 0x0D2a5107435cbbBE21Db1ADB5F1E078E63e59449 |
+| USTStrategyV3                    | 0x9CD243E5200B290F10d74D93E0CA6C9e51B3d664 |
+| MainnetUsdcStargateLPStrategy    | 0x8439Ac976aC597C71C0512D8a53697a39E8F9773 |
+| MainnetUsdtStargateLPStrategy    | 0x86130Dac04869a8201c7077270C10f3AFaba1c82 |
+| AvalancheUsdcStargateLPStrategy  |                                            |
+| AvalancheUsdtStargateLPStrategy  |                                            |
+| ArbitrumUsdcStargateLPStrategyV1 | 0x93503ab9f3Aa708B757cAf3238B7673baB2e3409 |
+| ArbitrumUsdtStargateLPStrategyV1 | 0x789004Ede61c9F855a0EcAAd7f0616bF23f0C952 |
+
+#### Strategy Stargate Swapper
+
+| Contract                      | Address                                    |
+| ----------------------------- | ------------------------------------------ |
+| ArbitrumStargateUsdcSwapperV1 | 0xa5E9237B53C44d4B3dE26e307c2034DF1084c94c |
+| ArbitrumStargateUsdtSwapperV1 | 0x52bdF3f9E70F3fd8302d43F501c69871AC21e73b |
 
 ### Avalanche - Joe Strategy
 
