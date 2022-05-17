@@ -3,11 +3,29 @@ import forEach from "mocha-each";
 import hre, { ethers, network, deployments, getNamedAccounts } from "hardhat";
 import { expect } from "chai";
 
-import { BentoBoxV1, ERC20Mock, ILPStaking, BaseStargateLPStrategy, IStargateRouter } from "../typechain";
+import { BentoBoxV1, ERC20Mock, ILPStaking, IStargateRouter, StargateLPStrategy } from "../typechain";
 import { advanceBlockTo, advanceTime, ChainId, getBigNumber, impersonate } from "../utilities";
 import { Constants } from "./constants";
 
 const cases = [
+  [
+    "Avalanche Stargate USDT",
+    "avalanche",
+    ChainId.Avalanche,
+    "https://api.avax.network/ext/bc/C/rpc",
+    14793964,
+    "AvalancheUsdtStargateLPStrategyV1",
+    "0x5754284f345afc66a98fbb0a0afe71e0f007b949",
+  ],
+  [
+    "Avalanche Stargate USDC",
+    "avalanche",
+    ChainId.Avalanche,
+    "https://api.avax.network/ext/bc/C/rpc",
+    14793964,
+    "AvalancheUsdcStargateLPStrategyV1",
+    "0x625e7708f30ca75bfd92586e17077590c60eb4cd",
+  ],
   [
     "Arbitrum Stargate USDT",
     "arbitrum",
@@ -30,7 +48,7 @@ const cases = [
 
 forEach(cases).describe("%s Strategy", async (_name, chain, chainId, jsonRpcUrl, blockNumber, deploymentName, whale) => {
   let snapshotId;
-  let Strategy: BaseStargateLPStrategy;
+  let Strategy: StargateLPStrategy;
   let StargateToken: ERC20Mock;
   let BentoBox: BentoBoxV1;
   let LpToken: ERC20Mock;
