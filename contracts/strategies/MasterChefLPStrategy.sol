@@ -2,17 +2,21 @@
 
 pragma solidity 0.8.7;
 
-import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "@rari-capital/solmate/src/tokens/ERC20.sol";
+import "@rari-capital/solmate/src/utils/SafeTransferLib.sol";
+
 import "../BaseStrategy.sol";
 import "../interfaces/ISushiSwap.sol";
 import "../interfaces/IMasterChef.sol";
 import "../libraries/Babylonian.sol";
 
 contract MasterChefLPStrategy is BaseStrategy {
-    using SafeERC20 for IERC20;
+    using SafeTransferLib for ERC20;
 
+    error InvalidFeePercent();
+    
     event LpMinted(uint256 total, uint256 strategyAmount, uint256 feeAmount);
-    uint256 private constant FEE = 10; // 10% fees on minted LP
+    event FeeChanged(uint256 previousFee, uint256 newFee, address previousFeeCollector, address newFeeCollector);
 
     ISushiSwap private immutable router;
     IMasterChef private immutable masterchef;
@@ -23,6 +27,7 @@ contract MasterChefLPStrategy is BaseStrategy {
     bool private immutable usePairToken0;
 
     address public feeCollector;
+    uint8 public feePercent;
 
     /** @param _strategyToken Address of the underlying LP token the strategy invests.
         @param _bentoBox BentoBox address.
@@ -54,9 +59,9 @@ contract MasterChefLPStrategy is BaseStrategy {
         feeCollector = _msgSender();
 
         (address token0, address token1) = _getPairTokens(_strategyToken);
-        IERC20(token0).safeApprove(address(_router), type(uint256).max);
-        IERC20(token1).safeApprove(address(_router), type(uint256).max);
-        IERC20(_strategyToken).safeApprove(address(_masterchef), type(uint256).max);
+        ERC20(token0).safeApprove(address(_router), type(uint256).max);
+        ERC20(token1).safeApprove(address(_router), type(uint256).max);
+        ERC20(_strategyToken).safeApprove(address(_masterchef), type(uint256).max);
 
         usePairToken0 = _usePairToken0;
         pairInputToken = _usePairToken0 ? token0 : token1;
@@ -101,7 +106,7 @@ contract MasterChefLPStrategy is BaseStrategy {
         uint256[] memory amounts = UniswapV2Library.getAmountsOut(factory, amountIn, path, pairCodeHash);
         amountOut = amounts[amounts.length - 1];
 
-        IERC20(path[0]).safeTransfer(UniswapV2Library.pairFor(factory, path[0], path[1], pairCodeHash), amounts[0]);
+        ERC20(path[0]).safeTransfer(UniswapV2Library.pairFor(factory, path[0], path[1], pairCodeHash), amounts[0]);
         _swap(amounts, path, address(this));
     }
 
@@ -128,7 +133,7 @@ contract MasterChefLPStrategy is BaseStrategy {
         }
 
         uint256[] memory amounts = UniswapV2Library.getAmountsOut(factory, swapAmountIn, path, pairCodeHash);
-        IERC20(path[0]).safeTransfer(strategyToken, amounts[0]);
+        ERC20(path[0]).safeTransfer(strategyToken, amounts[0]);
         _swap(amounts, path, address(this));
 
         uint256 amountStrategyLpBefore = IERC20(strategyToken).balanceOf(address(this));
@@ -148,16 +153,28 @@ contract MasterChefLPStrategy is BaseStrategy {
         );
 
         uint256 total = IERC20(strategyToken).balanceOf(address(this)) - amountStrategyLpBefore;
-        require(total >= amountOutMin, "INSUFFICIENT_AMOUNT_OUT");
+        require(total >= amountOutMin, "InsufficientAmountOut");
 
-        uint256 feeAmount = (total * FEE) / 100;
-        amountOut = total - feeAmount;
+        uint256 feeAmount = (total * feePercent) / 100;
+        if (feeAmount > 0) {
+            amountOut = total - feeAmount;
+            ERC20(strategyToken).safeTransfer(feeCollector, feeAmount);
+        }
 
-        IERC20(strategyToken).safeTransfer(feeCollector, feeAmount);
         emit LpMinted(total, amountOut, feeAmount);
     }
 
-    function setFeeCollector(address _feeCollector) external onlyOwner {
+    function setFeeParameters(address _feeCollector, uint8 _feePercent) external onlyOwner {
+        if (feePercent > 100) {
+            revert InvalidFeePercent();
+        }
+
+        uint256 previousFee = feePercent;
+        address previousFeeCollector = feeCollector;
+
         feeCollector = _feeCollector;
+        feePercent = _feePercent;
+
+        emit FeeChanged(previousFee, _feePercent, previousFeeCollector, _feeCollector);
     }
 }
