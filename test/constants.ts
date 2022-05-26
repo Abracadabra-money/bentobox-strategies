@@ -79,6 +79,7 @@ export const Constants = {
   },
   avalanche: {
     degenBox: "0x1fC83f75499b7620d53757f0b01E2ae626aAE530",
+    limone: "0xD825d06061fdc0585e4373F0A3F01a8C02b0e6A4",
     mim: "0x130966628846BFd36ff31a822705796e8cb8C18D",
     spell: "0xCE1bFFBD5374Dac86a2893119683F4911a2F7814",
     ust: "0xb599c3590F42f8F995ECfa0f85D2980B76862fc1",
@@ -86,6 +87,19 @@ export const Constants = {
     usdte: "0xc7198437980c041c805A1EDcbA50c1Ce5db95118",
     usdc: "0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E",
     usdce: "0xA7D7079b0FEaD91F3e65f86E8915Cb59c1a4C664",
+    qi: "0x8729438EB15e2C8B576fCc6AeCdA6A148776C0F5",
+    savax: "0x2b2C81e08f1Af8835a78Bb2A90AE924ACE0eA4bE",
+    wavax: "0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7",
+    joe: "0x6e84a6216eA6dACC71eE8E6b0a5B7322EEbC0fDd",
+    traderjoe: {
+      factory: "0x9Ad6C38BE94206cA50bb0d90783181662f0Cfa10",
+      router: "0x60aE616a2155Ee3d9A68541Ba4544862310933d4",
+      pairHashCode: "0x0bbca9af0511ad1a1da383135cf3a8d2ac620e549ef9f6ae3a4c33c2fed0af91",
+      masterChefV2: "0xd6a4F121CA35509aF06A0Be99093d08462f53052",
+      masterChefV3: "0x188bED1968b795d5c9022F6a0bb5931Ac4c18F00",
+      savaxWavax: "0x4b946c91C2B1a7d7C40FB3C130CdfBaf8389094d",
+      savaxWavaxPid: 51,
+    },
     platypus: {
       router: "0x73256EC7575D999C360c1EeC118ECbEFd8DA7D12",
     },

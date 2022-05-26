@@ -1,10 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-
 pragma solidity 0.8.7;
 
 import "@rari-capital/solmate/src/tokens/ERC20.sol";
 import "@rari-capital/solmate/src/utils/SafeTransferLib.sol";
-
 import "../BaseStrategy.sol";
 import "../interfaces/ISushiSwap.sol";
 import "../interfaces/IMasterChef.sol";
@@ -14,17 +12,27 @@ contract MasterChefLPStrategy is BaseStrategy {
     using SafeTransferLib for ERC20;
 
     error InvalidFeePercent();
-    
+    error InsupportedToken(address token);
+
     event LpMinted(uint256 total, uint256 strategyAmount, uint256 feeAmount);
+    event RewardTokenUpdated(address token, bool enabled);
     event FeeChanged(uint256 previousFee, uint256 newFee, address previousFeeCollector, address newFeeCollector);
 
-    ISushiSwap private immutable router;
-    IMasterChef private immutable masterchef;
-    uint256 private immutable pid;
+    ISushiSwap public immutable router;
+    IMasterChef public immutable masterchef;
+    uint256 public immutable pid;
+    address public immutable token0;
+    address public immutable token1;
 
-    address private immutable rewardToken;
-    address private immutable pairInputToken;
-    bool private immutable usePairToken0;
+    struct RewardTokenInfo {
+        bool enabled;
+        // When true, the _rewardToken will be swapped to the pair's token0 for one-sided liquidity providing, otherwise, the pair's token1.
+        bool usePairToken0;
+        // An intermediary token for swapping any rewards into it before swapping it to _inputPairToken
+        address bridgeToken;
+    }
+
+    mapping(address => RewardTokenInfo) public rewardTokensInfo;
 
     address public feeCollector;
     uint8 public feePercent;
@@ -32,10 +40,8 @@ contract MasterChefLPStrategy is BaseStrategy {
     /** @param _strategyToken Address of the underlying LP token the strategy invests.
         @param _bentoBox BentoBox address.
         @param _factory SushiSwap factory.
-        @param _bridgeToken An intermediary token for swapping any rewards into it before swapping it to _inputPairToken
         @param _strategyExecutor an EOA that will execute the safeHarvest function.
-        @param _usePairToken0 When true, the _rewardToken will be swapped to the pair's token0 for one-sided liquidity
-                                providing, otherwise, the pair's token1.
+
         @param _pairCodeHash This hash is used to calculate the address of a uniswap-like pool
                                 by providing only the addresses of the two ERC20 tokens.
     */
@@ -43,28 +49,39 @@ contract MasterChefLPStrategy is BaseStrategy {
         address _strategyToken,
         address _bentoBox,
         address _factory,
-        address _bridgeToken,
         address _strategyExecutor,
         IMasterChef _masterchef,
         uint256 _pid,
         ISushiSwap _router,
-        address _rewardToken,
-        bool _usePairToken0,
         bytes32 _pairCodeHash
-    ) BaseStrategy(_strategyToken, _bentoBox, _factory, _bridgeToken, _strategyExecutor, _pairCodeHash) {
+    ) BaseStrategy(_strategyToken, _bentoBox, _factory, address(0), _strategyExecutor, _pairCodeHash) {
         masterchef = _masterchef;
         pid = _pid;
         router = _router;
-        rewardToken = _rewardToken;
         feeCollector = _msgSender();
+        address _token0 = ISushiSwap(_strategyToken).token0();
+        address _token1 = ISushiSwap(_strategyToken).token1();
 
-        (address token0, address token1) = _getPairTokens(_strategyToken);
-        ERC20(token0).safeApprove(address(_router), type(uint256).max);
-        ERC20(token1).safeApprove(address(_router), type(uint256).max);
+        ERC20(_token0).safeApprove(address(_router), type(uint256).max);
+        ERC20(_token1).safeApprove(address(_router), type(uint256).max);
         ERC20(_strategyToken).safeApprove(address(_masterchef), type(uint256).max);
 
-        usePairToken0 = _usePairToken0;
-        pairInputToken = _usePairToken0 ? token0 : token1;
+        token0 = _token0;
+        token1 = _token1;
+    }
+
+    /// @param token The reward token to add
+    /// @param bridgeToken The token to swap the reward token into because swapping to the lp input token for minting
+    /// @param usePairToken0 When true, the _rewardToken will be swapped to the pair's token0 for one-sided liquidity
+    /// providing, otherwise, the pair's token1.
+    function setRewardTokenInfo(
+        address token,
+        address bridgeToken,
+        bool usePairToken0,
+        bool enabled
+    ) external onlyOwner {
+        rewardTokensInfo[token] = RewardTokenInfo(enabled, usePairToken0, bridgeToken);
+        emit RewardTokenUpdated(token, enabled);
     }
 
     function _skim(uint256 amount) internal override {
@@ -82,12 +99,6 @@ contract MasterChefLPStrategy is BaseStrategy {
 
     function _exit() internal override {
         masterchef.emergencyWithdraw(pid);
-    }
-
-    function _getPairTokens(address _pairAddress) private pure returns (address token0, address token1) {
-        ISushiSwap sushiPair = ISushiSwap(_pairAddress);
-        token0 = sushiPair.token0();
-        token1 = sushiPair.token1();
     }
 
     function _swapTokens(address tokenIn, address tokenOut) private returns (uint256 amountOut) {
@@ -115,16 +126,22 @@ contract MasterChefLPStrategy is BaseStrategy {
     }
 
     /// @notice Swap some tokens in the contract for the underlying and deposits them to address(this)
-    function swapToLP(uint256 amountOutMin) public onlyExecutor returns (uint256 amountOut) {
+    function swapToLP(uint256 amountOutMin, address rewardToken) public onlyExecutor returns (uint256 amountOut) {
+        RewardTokenInfo memory info = rewardTokensInfo[rewardToken];
+        if (!info.enabled) {
+            revert InsupportedToken(rewardToken);
+        }
+
+        address pairInputToken = info.usePairToken0 ? token0 : token1;
+
         uint256 tokenInAmount = _swapTokens(rewardToken, pairInputToken);
         (uint256 reserve0, uint256 reserve1, ) = ISushiSwap(strategyToken).getReserves();
-        (address token0, address token1) = _getPairTokens(strategyToken);
-
+ 
         // The pairInputToken amount to swap to get the equivalent pair second token amount
-        uint256 swapAmountIn = _calculateSwapInAmount(usePairToken0 ? reserve0 : reserve1, tokenInAmount);
+        uint256 swapAmountIn = _calculateSwapInAmount(info.usePairToken0 ? reserve0 : reserve1, tokenInAmount);
 
         address[] memory path = new address[](2);
-        if (usePairToken0) {
+        if (info.usePairToken0) {
             path[0] = token0;
             path[1] = token1;
         } else {
