@@ -31,6 +31,7 @@
     "moonbase:deploy": "hardhat --network moonbase deploy",
     "moonbase:export": "hardhat --network moonbase export --export exports/moonbase.json",
     "arbitrum:deploy": "hardhat --network arbitrum deploy",
+    "arbitrum:verify": "hardhat --network arbitrum etherscan-verify --solc-input --license GPL-3.0 --force-license --sleep",
     "arbitrum:export": "hardhat --network arbitrum export --export exports/arbitrum.json",
     "bsc:deploy": "hardhat --network bsc deploy",
     "bsc:verify": "hardhat --network bsc etherscan-verify --solc-input --license GPL-3.0 --force-license  --sleep",

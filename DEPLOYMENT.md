@@ -10,15 +10,15 @@
 | MainnetUsdtStargateLPStrategy     | 0x86130Dac04869a8201c7077270C10f3AFaba1c82 |
 | AvalancheUsdcStargateLPStrategyV1 | 0x94Ea0183A3268635E34332A76DD2e9Eff13A00f4 |
 | AvalancheUsdtStargateLPStrategyV1 | 0x56fa1D0c03961cF90443EDb88985B38506635c43 |
-| ArbitrumUsdcStargateLPStrategyV1  | 0x93503ab9f3Aa708B757cAf3238B7673baB2e3409 |
-| ArbitrumUsdtStargateLPStrategyV1  | 0x789004Ede61c9F855a0EcAAd7f0616bF23f0C952 |
+| ArbitrumUsdcStargateLPStrategyV1  | 0x978D34A96780414c5978AB3e861B0D098B2A006c |
+| ArbitrumUsdtStargateLPStrategyV1  | 0x006d8E69365bd93c38f4AF1814207a4002f938C5 |
 
 #### Strategy Stargate Swapper
 
 | Contract                       | Address                                    |
 | ------------------------------ | ------------------------------------------ |
-| ArbitrumStargateUsdcSwapperV1  | 0xa5E9237B53C44d4B3dE26e307c2034DF1084c94c |
-| ArbitrumStargateUsdtSwapperV1  | 0x52bdF3f9E70F3fd8302d43F501c69871AC21e73b |
+| ArbitrumStargateUsdcSwapperV1  | 0x25c27fb282c5D974e9B091d45F28BA5dE128e022 |
+| ArbitrumStargateUsdtSwapperV1  | 0x43838338F30795185Dabf1e52DaE6a3FEEdC953d |
 | AvalancheStargateUsdcSwapperV1 | 0xA6138E451216B18ec93A2927280130c02cFF8185 |
 | AvalancheStargateUsdtSwapperV1 | 0x0b5E135FfBCd93F1323bdEF45c1bEa5887588dfD |
 

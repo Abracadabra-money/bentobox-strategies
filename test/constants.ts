@@ -47,7 +47,7 @@ export const Constants = {
     },
   },
   arbitrum: {
-    degenBox: "0x74c764D41B77DBbb4fe771daB1939B00b146894A",
+    degenBox: "0x7C8FeF8eA9b1fE46A7689bfb8149341C90431D38",
     mim: "0xFEa7a6a0B346362BF88A9e4A88416B77a57D6c2A",
     usdc: "0xFF970A61A04b1cA14834A43f5dE4533eBDDB5CC8",
     usdt: "0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9",
