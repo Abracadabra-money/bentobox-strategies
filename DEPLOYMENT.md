@@ -53,7 +53,7 @@
 | Cake strategy (deprecated) | 0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82 | 0x08B918dD18E087893bb9d711d9E0BBaA7a63Ef63 |
 | Cake strategyV2            | 0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82 | 0x6171619B5793099F8C577fe5dFC08ceA35a3B3Aa |
 
-## Avalanche - Popsicle Dynamic LP Strategies
+## Avalanche - Popsicle Strategies
 
 **USDC.e/WAVAX**
 
@@ -63,8 +63,15 @@
 | Popsicle_UsdceWavaxJLP_DynamicSubLPStrategy | 0xaF2fBB9CB80EdFb7d3f2d170a65AE3bFa42d0B86 |
 | Popsicle_UsdceWavaxPLP_DynamicSubLPStrategy | 0xe05811aff7A105fe05b7144F4E0Dd777a83a194e |
 
+**sAVAX/wAVAX**
+
+| Contract                            | Strategy Address                           |
+| ----------------------------------- | ------------------------------------------ |
+| PopsicleWAvaxSavaxTraderJoeStrategy | 0xE8D68266e7Cb6A4c7c8e230993FC42634C0e4770 |
+
 ### Fantom - SpiritSwap Strategy
 
-| Contract            | Token address                              | Strategy Address                           |
-| ------------------- | ------------------------------------------ | ------------------------------------------ |
-| FTM/MIM LP strategy | 0xB32b31DfAfbD53E310390F641C7119b5B9Ea0488 | 0xD5d0f5d872ed4eB74AA3E8fa6D833d6f7603D2EC |
+| Contract               | Token address                              | Strategy Address                           |
+| ---------------------- | ------------------------------------------ | ------------------------------------------ |
+| FTM/MIM LP strategy    | 0xB32b31DfAfbD53E310390F641C7119b5B9Ea0488 | 0xD5d0f5d872ed4eB74AA3E8fa6D833d6f7603D2EC |
+| USDC/fUSDT LP strategy | 0xe7F86CEf8FEf60ce5050899D1F8e465C00D04a79 | 0x76DA31D7C9CbEAE102aff34D3398bC450c8374c1 |

@@ -40,7 +40,7 @@ const config: HardhatUserConfig = {
       optimisticEthereum: process.env.ETHERSCAN_TOKEN,
       arbitrumOne: process.env.ETHERSCAN_TOKEN,
       avalanche: process.env.ETHERSCAN_TOKEN,
-      opera: process.env.FTMSCAN_TOKEN,
+      opera: process.env.ETHERSCAN_TOKEN,
       bsc: process.env.BSCSCAN_TOKEN,
     },
   },
