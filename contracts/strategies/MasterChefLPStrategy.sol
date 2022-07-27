@@ -13,7 +13,6 @@ contract MasterChefLPStrategy is BaseStrategy {
 
     error InvalidFeePercent();
     error InsupportedToken(address token);
-
     event LpMinted(uint256 total, uint256 strategyAmount, uint256 feeAmount);
     event RewardTokenUpdated(address token, bool enabled);
     event FeeChanged(uint256 previousFee, uint256 newFee, address previousFeeCollector, address newFeeCollector);
