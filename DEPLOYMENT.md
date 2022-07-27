@@ -40,7 +40,7 @@
 | Cake strategy (deprecated) | 0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82 | 0x08B918dD18E087893bb9d711d9E0BBaA7a63Ef63 |
 | Cake strategyV2            | 0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82 | 0x6171619B5793099F8C577fe5dFC08ceA35a3B3Aa |
 
-## Avalanche - Popsicle Dynamic LP Strategies
+## Avalanche - Popsicle Strategies
 
 **USDC.e/WAVAX**
 
@@ -49,6 +49,12 @@
 | Popsicle_UsdceWavaxJLP_DynamicLPStrategy    | 0x0D2a5107435cbbBE21Db1ADB5F1E078E63e59449 |
 | Popsicle_UsdceWavaxJLP_DynamicSubLPStrategy | 0xaF2fBB9CB80EdFb7d3f2d170a65AE3bFa42d0B86 |
 | Popsicle_UsdceWavaxPLP_DynamicSubLPStrategy | 0xe05811aff7A105fe05b7144F4E0Dd777a83a194e |
+
+**sAVAX/wAVAX**
+
+| Contract                            | Strategy Address                           |
+| ----------------------------------- | ------------------------------------------ |
+| PopsicleWAvaxSavaxTraderJoeStrategy | 0xE8D68266e7Cb6A4c7c8e230993FC42634C0e4770 |
 
 ### Fantom - SpiritSwap Strategy
 
