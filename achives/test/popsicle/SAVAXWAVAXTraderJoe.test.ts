@@ -1,35 +1,27 @@
 /* eslint-disable prefer-const */
-import forEach from "mocha-each";
 import { ethers, network, deployments, getNamedAccounts } from "hardhat";
 import { expect } from "chai";
-
-import { BentoBoxV1, ERC20Mock, ILPStaking, BaseStargateLPStrategy } from "../typechain";
+import { BentoBoxV1, ERC20Mock, IERC20, ISpiritSwapGauge, MasterChefLPStrategy } from "../typechain";
 import { advanceTime, getBigNumber, impersonate } from "../utilities";
 import { Constants } from "./constants";
 
-const degenBox = Constants.mainnet.degenBox;
+const degenBox = Constants.avalanche.limone;
+const spiritToken = Constants.avalanche.joe;
+const pair = Constants.avalanche.traderjoe.savaxWavax;
+const pairWhale = "0xD3C8cd44D0196631Eaa7c59aFd4Db97Da5D6805A";
 
-const cases = [
-  ["Stargate USDC", "MainnetUsdcStargateLPStrategy", "0xe85070bf5b50ec06ef31ab0ed3db284649d872b8"],
-  ["Stargate USDT", "MainnetUsdtStargateLPStrategy", "0x99459A327E2e1f7535501AFF6A1Aada7024C45FD"],
-];
-
-forEach(cases).describe(
-  "%s Strategy",
-  async (
-    _name,
-    deploymentName,
-    lpWhale
-  ) => {
+describe("TraderJoe sAVAX/wAVAX LP Strategy", async () => {
   let snapshotId;
-  let Strategy: BaseStargateLPStrategy;
-  let StargateToken: ERC20Mock;
+  let Strategy: MasterChefLPStrategy;
   let BentoBox: BentoBoxV1;
-  let LpToken: ERC20Mock;
-  let LPStaking: ILPStaking;
+  let LpToken: IERC20;
+  let SpiritToken: ERC20Mock;
   let deployerSigner;
   let aliceSigner;
-  let pid;
+
+  const distributeReward = async () => {
+    await advanceTime(1210000);
+  };
 
   before(async () => {
     await network.provider.request({
@@ -37,56 +29,55 @@ forEach(cases).describe(
       params: [
         {
           forking: {
-            jsonRpcUrl: `https://eth-mainnet.alchemyapi.io/v2/${process.env.ALCHEMY_API_KEY}`,
-            blockNumber: 14745900,
+            enabled: true,
+            jsonRpcUrl: `https://api.avax.network/ext/bc/C/rpc`,
+            blockNumber: 15211086,
           },
         },
       ],
     });
 
-    await deployments.fixture(["MainnetStargateStrategies"]);
+    await deployments.fixture(["LimonSAVAXWAVAXTraderJoe"]);
     const { deployer, alice } = await getNamedAccounts();
 
-    BentoBox = await ethers.getContractAt<BentoBoxV1>("BentoBoxV1", degenBox);
-
-    const degenBoxOwner = await BentoBox.owner();
-    await impersonate(degenBoxOwner);
+    await impersonate(Constants.fantom.spiritswap.gaugeProxy);
 
     deployerSigner = await ethers.getSigner(deployer);
     aliceSigner = await ethers.getSigner(alice);
+
+    Strategy = await ethers.getContract("PopsicleWAvaxSavaxTraderJoeStrategy");
+    BentoBox = await ethers.getContractAt<BentoBoxV1>("BentoBoxV1", degenBox);
+    LpToken = await ethers.getContractAt<IERC20>("ERC20Mock", pair);
+    SpiritToken = await ethers.getContractAt<ERC20Mock>("ERC20Mock", spiritToken);
+
+    const degenBoxOwner = await BentoBox.owner();
+    await impersonate(degenBoxOwner);
     const degenBoxOnwerSigner = await ethers.getSigner(degenBoxOwner);
 
-    Strategy = await ethers.getContract(deploymentName);
-    LPStaking = await ethers.getContractAt<ILPStaking>("ILPStaking", Constants.mainnet.stargate.staking);
-    LpToken = await ethers.getContractAt<ERC20Mock>("ERC20Mock", (await Strategy.strategyToken()));
-    StargateToken = await ethers.getContractAt<ERC20Mock>("ERC20Mock", (await Strategy.stargateToken()));
-    pid = await Strategy.pid();
-
-    await impersonate(lpWhale);
-    const lpWhaleSigner = await ethers.getSigner(lpWhale);
-    await LpToken.connect(lpWhaleSigner).transfer(alice, await LpToken.balanceOf(lpWhale));
+    // Transfer LPs from a holder to alice
+    await impersonate(pairWhale);
+    const lpHolderSigner = await ethers.getSigner(pairWhale);
+    await LpToken.connect(lpHolderSigner).transfer(alice, await LpToken.balanceOf(pairWhale));
 
     const aliceLpAmount = await LpToken.balanceOf(alice);
     expect(aliceLpAmount).to.be.gt(0);
-    
+
     // Deposit into DegenBox
-    const balanceBefore = (await BentoBox.totals(LpToken.address)).elastic;
     await LpToken.connect(aliceSigner).approve(BentoBox.address, ethers.constants.MaxUint256);
     await BentoBox.connect(aliceSigner).deposit(LpToken.address, alice, alice, aliceLpAmount, 0);
-    let bentoBoxCakeAmount = (await BentoBox.totals(LpToken.address)).elastic;
-    expect(bentoBoxCakeAmount.sub(balanceBefore)).to.equal(aliceLpAmount);
+
+    const lpAmount = (await BentoBox.totals(LpToken.address)).elastic;
 
     BentoBox = BentoBox.connect(degenBoxOnwerSigner);
     await BentoBox.setStrategy(LpToken.address, Strategy.address);
     await advanceTime(1210000);
     await BentoBox.setStrategy(LpToken.address, Strategy.address);
-
-    bentoBoxCakeAmount = (await BentoBox.totals(LpToken.address)).elastic;
     await BentoBox.setStrategyTargetPercentage(LpToken.address, 70);
 
-    // Initial Rebalance, calling skim to deposit to cakepool
+    // Initial Rebalance, calling skim to deposit to the gauge
     await Strategy.safeHarvest(ethers.constants.MaxUint256, true, 0, false);
     expect(await LpToken.balanceOf(Strategy.address)).to.equal(0);
+    expect(await SpiritToken.balanceOf(Strategy.address)).to.eq(0);
 
     snapshotId = await ethers.provider.send("evm_snapshot", []);
   });
@@ -94,6 +85,18 @@ forEach(cases).describe(
   afterEach(async () => {
     await network.provider.send("evm_revert", [snapshotId]);
     snapshotId = await ethers.provider.send("evm_snapshot", []);
+  });
+
+  it("should farm spirit rewards", async () => {
+    let previousAmount = await SpiritToken.balanceOf(Strategy.address);
+
+    await distributeReward();
+    await Strategy.safeHarvest(ethers.constants.MaxUint256, false, 0, false);
+
+    const amount = await SpiritToken.balanceOf(Strategy.address);
+
+    expect(amount).to.be.gt(previousAmount);
+    previousAmount = amount;
   });
 
   it("should be able to change the fee collector only by the owner", async () => {
@@ -104,15 +107,40 @@ forEach(cases).describe(
     expect(await Strategy.feeCollector()).to.eq(alice.address);
   });
 
-  it("should mint lp from rewards and take 10%", async () => {
+  it("should mint lp from joe rewards and take 10%", async () => {
     const { deployer } = await getNamedAccounts();
     await Strategy.setFeeParameters(deployer, 10);
-    await Strategy.safeHarvest(0, false, 0,  false);
+
+    await distributeReward();
+    await Strategy.safeHarvest(0, false, 0, false);
 
     const feeCollector = await Strategy.feeCollector();
     const balanceFeeCollectorBefore = await LpToken.balanceOf(feeCollector);
     const balanceBefore = await LpToken.balanceOf(Strategy.address);
-    const tx = await Strategy.swapToLP(0);
+    const tx = await Strategy.swapToLP(0, Constants.avalanche.joe);
+    const balanceAfter = await LpToken.balanceOf(Strategy.address);
+    const balanceFeeCollectorAfter = await LpToken.balanceOf(feeCollector);
+
+    // Strategy should now have more LP
+    expect(balanceAfter.sub(balanceBefore)).to.be.gt(0);
+
+    // FeeCollector should have received some LP
+    expect(balanceFeeCollectorAfter.sub(balanceFeeCollectorBefore)).to.be.gt(0);
+
+    await expect(tx).to.emit(Strategy, "LpMinted");
+  });
+
+  it("should mint lp from qi rewards and take 10%", async () => {
+    const { deployer } = await getNamedAccounts();
+    await Strategy.setFeeParameters(deployer, 10);
+
+    await distributeReward();
+    await Strategy.safeHarvest(0, false, 0, false);
+
+    const feeCollector = await Strategy.feeCollector();
+    const balanceFeeCollectorBefore = await LpToken.balanceOf(feeCollector);
+    const balanceBefore = await LpToken.balanceOf(Strategy.address);
+    const tx = await Strategy.swapToLP(0, Constants.avalanche.qi);
     const balanceAfter = await LpToken.balanceOf(Strategy.address);
     const balanceFeeCollectorAfter = await LpToken.balanceOf(feeCollector);
 
@@ -126,20 +154,25 @@ forEach(cases).describe(
   });
 
   it("should avoid front running when minting lp", async () => {
-    await Strategy.safeHarvest(0, false, 0,  false);
-    await expect(Strategy.swapToLP(getBigNumber(2, 14))).to.revertedWith("INSUFFICIENT_AMOUNT_OUT");
+    await distributeReward();
+    await Strategy.safeHarvest(0, false, 0, false);
+    await expect(Strategy.swapToLP(getBigNumber(10), Constants.avalanche.joe)).to.revertedWith("InsufficientAmountOut");
   });
 
   it("should harvest harvest, mint lp and report a profit", async () => {
-    const oldBentoBalance = (await BentoBox.totals(LpToken.address)).elastic;
+    let oldBentoBalance = (await BentoBox.totals(LpToken.address)).elastic;
 
-    await advanceTime(1210000);
+    await distributeReward();
     await Strategy.safeHarvest(0, false, 0, false);
-    await Strategy.swapToLP(0);
+    await Strategy.swapToLP(0, Constants.avalanche.joe);
 
     await expect(Strategy.safeHarvest(0, false, 0, false)).to.emit(BentoBox, "LogStrategyProfit");
-    const newBentoBalance = (await BentoBox.totals(LpToken.address)).elastic;
-    expect(newBentoBalance).to.be.gt(oldBentoBalance);
+    expect((await BentoBox.totals(LpToken.address)).elastic).to.be.gt(oldBentoBalance);
+
+    oldBentoBalance = (await BentoBox.totals(LpToken.address)).elastic;
+    await Strategy.swapToLP(0, Constants.avalanche.qi);
+    await expect(Strategy.safeHarvest(0, false, 0, false)).to.emit(BentoBox, "LogStrategyProfit");
+    expect((await BentoBox.totals(LpToken.address)).elastic).to.be.gt(oldBentoBalance);
   });
 
   it("should rebalance and withdraw lp to degenbox", async () => {
@@ -154,9 +187,10 @@ forEach(cases).describe(
   it("should exit the strategy properly", async () => {
     const oldBentoBalance = await LpToken.balanceOf(BentoBox.address);
 
-    await advanceTime(1210000);
+    await distributeReward();
     await Strategy.safeHarvest(0, false, 0, false);
-    await Strategy.swapToLP(0);
+    await Strategy.swapToLP(0, Constants.avalanche.joe);
+    await Strategy.swapToLP(0, Constants.avalanche.qi);
 
     await expect(BentoBox.setStrategy(LpToken.address, Strategy.address)).to.emit(BentoBox, "LogStrategyQueued");
     await advanceTime(1210000);

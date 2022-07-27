@@ -7,16 +7,18 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 
 import "../../BaseStrategy.sol";
 import "../../interfaces/IBentoBoxMinimal.sol";
+import "../../interfaces/stargate/IStargateSwapper.sol";
 import "../../interfaces/stargate/ILPStaking.sol";
 import "../../interfaces/stargate/IStargateToken.sol";
 import "../../interfaces/stargate/IStargatePool.sol";
 import "../../interfaces/stargate/IStargateRouter.sol";
 
-abstract contract BaseStargateLPStrategy is BaseStrategy {
+contract StargateLPStrategy is BaseStrategy {
     using SafeTransferLib for ERC20;
 
     event LpMinted(uint256 total, uint256 strategyAmount, uint256 feeAmount);
     event FeeParametersChanged(address feeCollector, uint256 feeAmount);
+    event StargateSwapperChanged(address oldSwapper, address newSwapper);
 
     ILPStaking public immutable staking;
     IStargateToken public immutable stargateToken;
@@ -28,6 +30,8 @@ abstract contract BaseStargateLPStrategy is BaseStrategy {
 
     address public feeCollector;
     uint8 public feePercent;
+
+    IStargateSwapper public stargateSwapper;
 
     constructor(
         address _strategyToken,
@@ -49,7 +53,7 @@ abstract contract BaseStargateLPStrategy is BaseStrategy {
 
         _underlyingToken.safeApprove(address(_router), type(uint256).max);
         underlyingToken = _underlyingToken;
-        
+
         ERC20(_strategyToken).safeApprove(address(_staking), type(uint256).max);
     }
 
@@ -71,11 +75,13 @@ abstract contract BaseStargateLPStrategy is BaseStrategy {
     }
 
     function swapToLP(uint256 amountOutMin) public onlyExecutor returns (uint256 amountOut) {
+        uint256 stgBalance = stargateToken.balanceOf(address(this));
+
         // Current Stargate LP Amount
         uint256 amountStrategyLpBefore = ERC20(strategyToken).balanceOf(address(this));
 
         // STG -> Pool underlying Token (USDT, USDC...)
-        _swapToUnderlying();
+        stargateSwapper.swapToUnderlying(stgBalance, address(this));
 
         // Pool underlying Token in this contract
         uint256 underlyingTokenAmount = underlyingToken.balanceOf(address(this));
@@ -102,5 +108,19 @@ abstract contract BaseStargateLPStrategy is BaseStrategy {
         emit FeeParametersChanged(_feeCollector, _feePercent);
     }
 
-    function _swapToUnderlying() internal virtual;
+    function setStargateSwapper(address _stargateSwapper) external onlyOwner {
+        address previousStargateSwapper = address(stargateSwapper);
+
+        if (previousStargateSwapper != address(0)) {
+            stargateToken.approve(previousStargateSwapper, 0);
+        }
+
+        stargateSwapper = IStargateSwapper(_stargateSwapper);
+
+        if (_stargateSwapper != address(0)) {
+            stargateToken.approve(_stargateSwapper, type(uint256).max);
+        }
+
+        emit StargateSwapperChanged(previousStargateSwapper, _stargateSwapper);
+    }
 }

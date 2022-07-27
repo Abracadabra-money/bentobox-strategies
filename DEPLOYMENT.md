@@ -2,12 +2,25 @@
 
 ### Ethereum
 
-| Contract                      | Address                                    |
-| ----------------------------- | ------------------------------------------ |
-| USTMiddleLayer                | 0x0D2a5107435cbbBE21Db1ADB5F1E078E63e59449 |
-| USTStrategyV3                 | 0x9CD243E5200B290F10d74D93E0CA6C9e51B3d664 |
-| MainnetUsdcStargateLPStrategy | 0x8439Ac976aC597C71C0512D8a53697a39E8F9773 |
-| MainnetUsdtStargateLPStrategy | 0x86130Dac04869a8201c7077270C10f3AFaba1c82 |
+| Contract                          | Address                                    |
+| --------------------------------- | ------------------------------------------ |
+| USTMiddleLayer                    | 0x0D2a5107435cbbBE21Db1ADB5F1E078E63e59449 |
+| USTStrategyV3                     | 0x9CD243E5200B290F10d74D93E0CA6C9e51B3d664 |
+| MainnetUsdcStargateLPStrategy     | 0x8439Ac976aC597C71C0512D8a53697a39E8F9773 |
+| MainnetUsdtStargateLPStrategy     | 0x86130Dac04869a8201c7077270C10f3AFaba1c82 |
+| AvalancheUsdcStargateLPStrategyV1 | 0x94Ea0183A3268635E34332A76DD2e9Eff13A00f4 |
+| AvalancheUsdtStargateLPStrategyV1 | 0x56fa1D0c03961cF90443EDb88985B38506635c43 |
+| ArbitrumUsdcStargateLPStrategyV1  | 0x978D34A96780414c5978AB3e861B0D098B2A006c |
+| ArbitrumUsdtStargateLPStrategyV1  | 0x006d8E69365bd93c38f4AF1814207a4002f938C5 |
+
+#### Strategy Stargate Swapper
+
+| Contract                       | Address                                    |
+| ------------------------------ | ------------------------------------------ |
+| ArbitrumStargateUsdcSwapperV1  | 0x25c27fb282c5D974e9B091d45F28BA5dE128e022 |
+| ArbitrumStargateUsdtSwapperV1  | 0x43838338F30795185Dabf1e52DaE6a3FEEdC953d |
+| AvalancheStargateUsdcSwapperV1 | 0xA6138E451216B18ec93A2927280130c02cFF8185 |
+| AvalancheStargateUsdtSwapperV1 | 0x0b5E135FfBCd93F1323bdEF45c1bEa5887588dfD |
 
 ### Avalanche - Joe Strategy
 
@@ -40,7 +53,7 @@
 | Cake strategy (deprecated) | 0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82 | 0x08B918dD18E087893bb9d711d9E0BBaA7a63Ef63 |
 | Cake strategyV2            | 0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82 | 0x6171619B5793099F8C577fe5dFC08ceA35a3B3Aa |
 
-## Avalanche - Popsicle Dynamic LP Strategies
+## Avalanche - Popsicle Strategies
 
 **USDC.e/WAVAX**
 
@@ -50,8 +63,15 @@
 | Popsicle_UsdceWavaxJLP_DynamicSubLPStrategy | 0xaF2fBB9CB80EdFb7d3f2d170a65AE3bFa42d0B86 |
 | Popsicle_UsdceWavaxPLP_DynamicSubLPStrategy | 0xe05811aff7A105fe05b7144F4E0Dd777a83a194e |
 
+**sAVAX/wAVAX**
+
+| Contract                            | Strategy Address                           |
+| ----------------------------------- | ------------------------------------------ |
+| PopsicleWAvaxSavaxTraderJoeStrategy | 0xE8D68266e7Cb6A4c7c8e230993FC42634C0e4770 |
+
 ### Fantom - SpiritSwap Strategy
 
-| Contract            | Token address                              | Strategy Address                           |
-| ------------------- | ------------------------------------------ | ------------------------------------------ |
-| FTM/MIM LP strategy | 0xB32b31DfAfbD53E310390F641C7119b5B9Ea0488 | 0xD5d0f5d872ed4eB74AA3E8fa6D833d6f7603D2EC |
+| Contract               | Token address                              | Strategy Address                           |
+| ---------------------- | ------------------------------------------ | ------------------------------------------ |
+| FTM/MIM LP strategy    | 0xB32b31DfAfbD53E310390F641C7119b5B9Ea0488 | 0xD5d0f5d872ed4eB74AA3E8fa6D833d6f7603D2EC |
+| USDC/fUSDT LP strategy | 0xe7F86CEf8FEf60ce5050899D1F8e465C00D04a79 | 0x76DA31D7C9CbEAE102aff34D3398bC450c8374c1 |

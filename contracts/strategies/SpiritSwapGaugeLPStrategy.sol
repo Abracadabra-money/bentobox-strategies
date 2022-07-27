@@ -10,7 +10,7 @@ import "../interfaces/ISushiSwap.sol";
 import "../interfaces/ISpiritSwapGauge.sol";
 import "../libraries/Babylonian.sol";
 
-contract SpiritSwapLPStrategy is BaseStrategy {
+contract SpiritSwapGaugeLPStrategy is BaseStrategy {
     using SafeTransferLib for ERC20;
 
     error InsufficientAmountOut();
