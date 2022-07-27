@@ -47,6 +47,45 @@ export async function verifyContract(name: string, address: string, constructorA
   }
 }
 
+export enum ChainId {
+  Mainnet = 1,
+  Ropsten = 3,
+  Rinkeby = 4,
+  Goerli = 5,
+  Kovan = 42,
+  BSC = 56,
+  BSCTestnet = 97,
+  xDai = 100,
+  Polygon = 137,
+  Theta = 361,
+  ThetaTestnet = 365,
+  Moonriver = 1285,
+  Mumbai = 80001,
+  Harmony = 1666600000,
+  Palm = 11297108109,
+  Localhost = 1337,
+  Hardhat = 31337,
+  Fantom = 250,
+  Arbitrum = 42161,
+  Avalanche = 43114,
+  Boba = 288,
+}
+
+export const setDeploymentSupportedChains = (supportedChains: string[], deployFunction: DeployFunction) => {
+  if (network.name !== "hardhat" || process.env.HARDHAT_LOCAL_NODE) {
+    deployFunction.skip = ({ getChainId }) =>
+      new Promise(async (resolve, reject) => {
+        try {
+          getChainId().then((chainId) => {
+            resolve(supportedChains.indexOf(chainId.toString()) === -1);
+          });
+        } catch (error) {
+          reject(error);
+        }
+      });
+  }
+};
+
 export async function deployCauldron<T extends Contract>(
   deploymentName: string,
   bentoBox: string,
