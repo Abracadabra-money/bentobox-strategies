@@ -75,3 +75,11 @@
 | ---------------------- | ------------------------------------------ | ------------------------------------------ |
 | FTM/MIM LP strategy    | 0xB32b31DfAfbD53E310390F641C7119b5B9Ea0488 | 0xD5d0f5d872ed4eB74AA3E8fa6D833d6f7603D2EC |
 | USDC/fUSDT LP strategy | 0xe7F86CEf8FEf60ce5050899D1F8e465C00D04a79 | 0x76DA31D7C9CbEAE102aff34D3398bC450c8374c1 |
+
+## Optimism - Popsicle Strategies
+
+**Veldrome vOP/USDC**
+
+| Contract                                | Strategy Address |
+| --------------------------------------- | ---------------- |
+| PopsicleVelodromeVolatileOPUSDCStrategy | TBD              |
