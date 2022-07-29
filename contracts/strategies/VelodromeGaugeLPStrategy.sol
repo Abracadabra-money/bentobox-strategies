@@ -7,11 +7,16 @@ import "@rari-capital/solmate/src/utils/SafeTransferLib.sol";
 
 import "../BaseStrategy.sol";
 import "../interfaces/ISushiSwap.sol";
-import "../interfaces/IVelodromeGauge.sol";
+import "../interfaces/velodrome/IVelodromeRouter.sol";
+import "../interfaces/velodrome/IVelodromeGauge.sol";
 import "../libraries/Babylonian.sol";
 
 interface IRewardSwapper {
-    function swap(address token, uint256 amount, address recipient) external returns (uint256 lpAmount);
+    function swap(
+        address token,
+        uint256 amount,
+        address recipient
+    ) external returns (uint256 lpAmount);
 }
 
 contract VelodromeGaugeLPStrategy is BaseStrategy {
@@ -19,30 +24,46 @@ contract VelodromeGaugeLPStrategy is BaseStrategy {
 
     error InsufficientAmountOut();
     error InvalidFeePercent();
+    error NotCustomSwapperExecutor();
 
     event LpMinted(uint256 total, uint256 strategyAmount, uint256 feeAmount);
+    event FeeParametersChanged(address feeCollector, uint256 feePercent);
+    event RewardTokenEnabled(address token, bool enabled);
+    event LogSetCustomSwapperExecutor(address indexed executor, bool allowed);
 
     bytes32 internal constant PAIR_CODE_HASH = 0xc1ac28b1c4ebe53c0cff67bab5878c4eb68759bb1e9f73977cd266b247d149f0;
-    ISushiSwap internal constant ROUTER = ISushiSwap(0xa132DAB612dB5cB9fC9Ac426A0Cc215A3423F9c9);
+    IVelodromeRouter internal constant ROUTER = IVelodromeRouter(0xa132DAB612dB5cB9fC9Ac426A0Cc215A3423F9c9);
     address public constant VELO = 0x3c8B650257cFb5f272f799F5e2b4e65093a11a05;
 
     IVelodromeGauge public immutable gauge;
+    bool public immutable stable;
 
     address public immutable rewardToken;
     address public immutable pairInputToken;
     bool public immutable usePairToken0;
-    uint256 public immutable pid;
 
     address public feeCollector;
     uint8 public feePercent;
 
     address[] public rewardTokens;
 
+    /// @notice add another access level for custom swapper since this has more power
+    /// than executors.
+    mapping(address => bool) public customSwapperExecutors;
+
+    modifier onlyCustomSwapperExecutors() {
+        if (!customSwapperExecutors[msg.sender]) {
+            revert NotCustomSwapperExecutor();
+        }
+        _;
+    }
+
     /** @param _strategyToken Address of the underlying LP token the strategy invests.
         @param _bentoBox BentoBox address.
         @param _factory SushiSwap factory.
         @param _strategyExecutor an EOA that will execute the safeHarvest function.
-        @param _gauge The spiritswap gauge farm
+        @param _gauge The velodrome gauge farm
+        @param _stable Stable or Volatile Pool
         @param _rewardToken The gauge reward token
         @param _usePairToken0 When true, the _rewardToken will be swapped to the pair's token0 for one-sided liquidity
                                 providing, otherwise, the pair's token1.
@@ -53,14 +74,14 @@ contract VelodromeGaugeLPStrategy is BaseStrategy {
         address _factory,
         address _strategyExecutor,
         IVelodromeGauge _gauge,
-        uint256 _pid,
+        bool _stable,
         address _rewardToken,
         bool _usePairToken0
     ) BaseStrategy(_strategyToken, _bentoBox, _factory, address(0), _strategyExecutor, PAIR_CODE_HASH) {
         gauge = _gauge;
         rewardToken = _rewardToken;
         feeCollector = _msgSender();
-        pid = _pid;
+        stable = _stable;
 
         (address token0, address token1) = _getPairTokens(_strategyToken);
         ERC20(token0).safeApprove(address(ROUTER), type(uint256).max);
@@ -74,7 +95,7 @@ contract VelodromeGaugeLPStrategy is BaseStrategy {
     }
 
     function _skim(uint256 amount) internal override {
-        gauge.deposit(amount, pid);
+        gauge.deposit(amount, 0);
     }
 
     function _harvest(uint256) internal override returns (int256) {
@@ -150,10 +171,11 @@ contract VelodromeGaugeLPStrategy is BaseStrategy {
         ROUTER.addLiquidity(
             token0,
             token1,
+            stable,
             ERC20(token0).balanceOf(address(this)),
             ERC20(token1).balanceOf(address(this)),
-            1,
-            1,
+            0,
+            0,
             address(this),
             type(uint256).max
         );
@@ -173,13 +195,21 @@ contract VelodromeGaugeLPStrategy is BaseStrategy {
         emit LpMinted(total, amountOut, feeAmount);
     }
 
-    function swapToLP(IERC20 token, uint256 amountOutMin, IRewardSwapper swapper) public onlyExecutor returns (uint256 amountOut) {
+    /// @notice swap any token inside this contract using the given custom swapper.
+    /// expected output is `strategyToken` tokens.
+    /// Only custom swpper executors are allowed to call this function as an extra layer
+    /// of security because it could be used to transfer funds away.
+    function swapToLPUsingCustomSwapper(
+        IERC20 token,
+        uint256 amountOutMin,
+        IRewardSwapper swapper
+    ) public onlyCustomSwapperExecutors returns (uint256 amountOut) {
         uint256 amountStrategyLpBefore = ERC20(strategyToken).balanceOf(address(this));
 
         uint256 amount = token.balanceOf(address(this));
         token.transfer(address(swapper), amount);
         swapper.swap(address(token), amount, address(this));
-        
+
         uint256 total = ERC20(strategyToken).balanceOf(address(this)) - amountStrategyLpBefore;
         if (total < amountOutMin) {
             revert InsufficientAmountOut();
@@ -202,6 +232,8 @@ contract VelodromeGaugeLPStrategy is BaseStrategy {
 
         feeCollector = _feeCollector;
         feePercent = _feePercent;
+
+        emit FeeParametersChanged(_feeCollector, _feePercent);
     }
 
     function setRewardTokenEnabled(address token, bool enabled) external onlyOwner {
@@ -216,5 +248,12 @@ contract VelodromeGaugeLPStrategy is BaseStrategy {
         if (enabled) {
             rewardTokens.push(token);
         }
+
+        emit RewardTokenEnabled(token, enabled);
+    }
+
+    function setCustomSwapperExecutor(address executor, bool value) external onlyOwner {
+        customSwapperExecutors[executor] = value;
+        emit LogSetCustomSwapperExecutor(executor, value);
     }
 }

@@ -133,7 +133,7 @@ export const Constants = {
       router: "0xa132DAB612dB5cB9fC9Ac426A0Cc215A3423F9c9",
       factory: "0x25CbdDb98b35ab1FF77413456B31EC81A6B6B746",
       vOpUsdc: "0x47029bc8f5CBe3b464004E87eF9c9419a48018cd",
-      vOpUsdcGauge: "0x0299d40E99F2a5a1390261f5A71d13C3932E214C"
-    }
-  }
+      vOpUsdcGauge: "0x0299d40E99F2a5a1390261f5A71d13C3932E214C",
+    },
+  },
 };

@@ -1,26 +1,24 @@
 /* eslint-disable prefer-const */
 import { ethers, network, deployments, getNamedAccounts } from "hardhat";
 import { expect } from "chai";
-import { BentoBoxV1, ERC20Mock, IERC20, ISpiritSwapGauge, VelodromeGaugeLPStrategy } from "../typechain";
+import { BentoBoxV1, ERC20Mock, IERC20, IVelodromeGauge, IVelodromeRouter, VelodromeGaugeLPStrategy } from "../typechain";
 import { advanceTime, getBigNumber, impersonate } from "../utilities";
 import { Constants } from "./constants";
 
-const degenBox = Constants.optimism.limone;
-const spiritToken = Constants.optimism.velodrome.velo;
-const gauge = Constants.optimism.velodrome.vOpUsdcGauge;
-const pair = Constants.optimism.velodrome.vOpUsdc;
-const pairWhale = "0x3a0cA7dBe248eF8Ce5Ed2237cE85C7aE6036513A";
+const opWhale = "0x2501c477D0A35545a387Aa4A3EEe4292A9a8B3F0";
+const usdcWhale = "0xAD7b4C162707E0B2b5f6fdDbD3f8538A5fbA0d60";
 
 describe("Velodrome vOP/USDC LP Strategy", async () => {
   let snapshotId;
-  let Strategy: SpiritSwapLPStrategy;
+  let Strategy: VelodromeGaugeLPStrategy;
   let BentoBox: BentoBoxV1;
   let LpToken: IERC20;
-  let SpiritToken: ERC20Mock;
-  let Gauge: ISpiritSwapGauge;
+  let VeloToken: ERC20Mock;
+  let OpToken: ERC20Mock;
+  let UsdcToken: ERC20Mock;
+  let Gauge: IVelodromeGauge;
   let deployerSigner;
   let aliceSigner;
-  let spiritTokenOwnerSigner;
 
   const distributeReward = async () => {
     await advanceTime(1210000);
@@ -33,14 +31,14 @@ describe("Velodrome vOP/USDC LP Strategy", async () => {
         {
           forking: {
             enabled: true,
-            jsonRpcUrl: 'https://mainnet.optimism.io',
-            blockNumber: 15234058,
+            jsonRpcUrl: "https://mainnet.optimism.io",
+            blockNumber: 16312283,
           },
         },
       ],
     });
 
-    await deployments.fixture(["VelodromeVOPUSDCStrategy"]);
+    await deployments.fixture(["LimoneVelodromeVolatileOpUsdcStrategy"]);
     const { deployer, alice } = await getNamedAccounts();
 
     await impersonate(Constants.optimism.velodrome.vOpUsdcGauge);
@@ -48,24 +46,40 @@ describe("Velodrome vOP/USDC LP Strategy", async () => {
     deployerSigner = await ethers.getSigner(deployer);
     aliceSigner = await ethers.getSigner(alice);
 
-    Strategy = await ethers.getContract("FUSDTUSDCSpiritSwapLPStrategy");
-    BentoBox = await ethers.getContractAt<BentoBoxV1>("BentoBoxV1", degenBox);
-    Gauge = await ethers.getContractAt<ISpiritSwapGauge>("ISpiritSwapGauge", gauge);
-    LpToken = await ethers.getContractAt<IERC20>("ERC20Mock", pair);
-    SpiritToken = await ethers.getContractAt<ERC20Mock>("ERC20Mock", spiritToken);
+    Strategy = await ethers.getContract("LimoneVelodromeVolatileOpUsdcStrategy");
+    BentoBox = await ethers.getContractAt<BentoBoxV1>("BentoBoxV1", Constants.optimism.limone);
+    Gauge = await ethers.getContractAt<IVelodromeGauge>("IVelodromeGauge", Constants.optimism.velodrome.vOpUsdcGauge);
+    LpToken = await ethers.getContractAt<IERC20>("ERC20Mock", Constants.optimism.velodrome.vOpUsdc);
+    VeloToken = await ethers.getContractAt<ERC20Mock>("ERC20Mock", Constants.optimism.velodrome.velo);
+    OpToken = await ethers.getContractAt<ERC20Mock>("ERC20Mock", Constants.optimism.op);
+    UsdcToken = await ethers.getContractAt<ERC20Mock>("ERC20Mock", Constants.optimism.usdc);
+
+    const VelodromeRouter = await ethers.getContractAt<IVelodromeRouter>("IVelodromeRouter", Constants.optimism.velodrome.router);
 
     const degenBoxOwner = await BentoBox.owner();
     await impersonate(degenBoxOwner);
     const degenBoxOnwerSigner = await ethers.getSigner(degenBoxOwner);
 
-    const spiritTokenOwner = await SpiritToken.owner();
-    await impersonate(spiritTokenOwner);
-    spiritTokenOwnerSigner = await ethers.getSigner(spiritTokenOwner);
-
     // Transfer LPs from a holder to alice
-    await impersonate(pairWhale);
-    const lpHolderSigner = await ethers.getSigner(pairWhale);
-    await LpToken.connect(lpHolderSigner).transfer(alice, await LpToken.balanceOf(pairWhale));
+    await impersonate(opWhale);
+    await impersonate(usdcWhale);
+    const opWhaleSigner = await ethers.getSigner(opWhale);
+    const usdcWhaleSigner = await ethers.getSigner(usdcWhale);
+    await OpToken.connect(opWhaleSigner).transfer(alice, getBigNumber(1000, 18));
+    await UsdcToken.connect(usdcWhaleSigner).transfer(alice, getBigNumber(5000, 6));
+    await OpToken.connect(aliceSigner).approve(VelodromeRouter.address, ethers.constants.MaxUint256);
+    await UsdcToken.connect(aliceSigner).approve(VelodromeRouter.address, ethers.constants.MaxUint256);
+    await VelodromeRouter.connect(aliceSigner).addLiquidity(
+      OpToken.address,
+      UsdcToken.address,
+      false,
+      getBigNumber(1000, 18),
+      getBigNumber(5000, 6),
+      0,
+      0,
+      alice,
+      ethers.constants.MaxUint256
+    );
 
     const aliceLpAmount = await LpToken.balanceOf(alice);
     expect(aliceLpAmount).to.be.gt(0);
@@ -85,7 +99,7 @@ describe("Velodrome vOP/USDC LP Strategy", async () => {
     // Initial Rebalance, calling skim to deposit to the gauge
     await Strategy.safeHarvest(ethers.constants.MaxUint256, true, 0, false);
     expect(await LpToken.balanceOf(Strategy.address)).to.equal(0);
-    expect(await SpiritToken.balanceOf(Strategy.address)).to.eq(0);
+    expect(await VeloToken.balanceOf(Strategy.address)).to.eq(0);
 
     snapshotId = await ethers.provider.send("evm_snapshot", []);
   });
@@ -95,13 +109,13 @@ describe("Velodrome vOP/USDC LP Strategy", async () => {
     snapshotId = await ethers.provider.send("evm_snapshot", []);
   });
 
-  it("should farm spirit rewards", async () => {
-    let previousAmount = await SpiritToken.balanceOf(Strategy.address);
+  it("should farm rewards", async () => {
+    let previousAmount = await VeloToken.balanceOf(Strategy.address);
 
     await distributeReward();
     await Strategy.safeHarvest(ethers.constants.MaxUint256, false, 0, false);
 
-    const amount = await SpiritToken.balanceOf(Strategy.address);
+    const amount = await VeloToken.balanceOf(Strategy.address);
 
     expect(amount).to.be.gt(previousAmount);
     previousAmount = amount;
@@ -115,7 +129,7 @@ describe("Velodrome vOP/USDC LP Strategy", async () => {
     expect(await Strategy.feeCollector()).to.eq(alice.address);
   });
 
-  it("should mint lp from spirit rewards and take 10%", async () => {
+  it("should mint lp from rewards and take 10%", async () => {
     const { deployer } = await getNamedAccounts();
     await Strategy.setFeeParameters(deployer, 10);
 
@@ -171,7 +185,7 @@ describe("Velodrome vOP/USDC LP Strategy", async () => {
 
     await distributeReward();
     await Strategy.safeHarvest(0, false, 0, false); // harvest spirit
-    await Strategy.swapToLP(0); // mint new ftm/mimlp from harvest spirit
+    await Strategy.swapToLP(0); // mint lp from harvested rewards
 
     await expect(BentoBox.setStrategy(LpToken.address, Strategy.address)).to.emit(BentoBox, "LogStrategyQueued");
     await advanceTime(1210000);
