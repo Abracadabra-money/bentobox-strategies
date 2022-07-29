@@ -3,8 +3,8 @@
 
 pragma solidity 0.8.7;
 
-import "@rari-capital/solmate/src/utils/SafeTransferLib.sol";
-import "@rari-capital/solmate/src/tokens/ERC20.sol";
+import "solmate/src/utils/SafeTransferLib.sol";
+import "solmate/src/tokens/ERC20.sol";
 import "../interfaces/IStrategy.sol";
 import "../interfaces/IBentoBoxMinimal.sol";
 

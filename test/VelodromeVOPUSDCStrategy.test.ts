@@ -1,7 +1,7 @@
 /* eslint-disable prefer-const */
 import { ethers, network, deployments, getNamedAccounts } from "hardhat";
 import { expect } from "chai";
-import { BentoBoxV1, ERC20Mock, IERC20, IVelodromeGauge, IVelodromeRouter, VelodromeGaugeLPStrategy } from "../typechain";
+import { BentoBoxV1, ERC20Mock, IERC20, IVelodromeGauge, IVelodromeRouter, VelodromeGaugeVolatileLPStrategy } from "../typechain";
 import { advanceTime, getBigNumber, impersonate } from "../utilities";
 import { Constants } from "./constants";
 
@@ -10,7 +10,7 @@ const usdcWhale = "0xAD7b4C162707E0B2b5f6fdDbD3f8538A5fbA0d60";
 
 describe("Velodrome vOP/USDC LP Strategy", async () => {
   let snapshotId;
-  let Strategy: VelodromeGaugeLPStrategy;
+  let Strategy: VelodromeGaugeVolatileLPStrategy;
   let BentoBox: BentoBoxV1;
   let LpToken: IERC20;
   let VeloToken: ERC20Mock;
@@ -19,9 +19,18 @@ describe("Velodrome vOP/USDC LP Strategy", async () => {
   let Gauge: IVelodromeGauge;
   let deployerSigner;
   let aliceSigner;
+  let gaugeProxySigner;
 
-  const distributeReward = async () => {
+  const distributeReward = async (amount = getBigNumber(50_000)) => {
     await advanceTime(1210000);
+    const rewardDistributor = "0x5d5Bea9f0Fc13d967511668a60a3369fD53F784F";
+    await impersonate(rewardDistributor);
+    const rewardDistributorSigner = await ethers.getSigner(rewardDistributor);
+    
+    await VeloToken.connect(rewardDistributorSigner).transfer(gaugeProxySigner.address, amount);
+    await VeloToken.connect(gaugeProxySigner).approve(Gauge.address, 0);
+    await VeloToken.connect(gaugeProxySigner).approve(Gauge.address, amount);
+    await Gauge.connect(gaugeProxySigner).notifyRewardAmount(VeloToken.address, amount);
   };
 
   before(async () => {
@@ -45,6 +54,7 @@ describe("Velodrome vOP/USDC LP Strategy", async () => {
 
     deployerSigner = await ethers.getSigner(deployer);
     aliceSigner = await ethers.getSigner(alice);
+    gaugeProxySigner = await ethers.getSigner(Constants.optimism.velodrome.vOpUsdcGauge);
 
     Strategy = await ethers.getContract("LimoneVelodromeVolatileOpUsdcStrategy");
     BentoBox = await ethers.getContractAt<BentoBoxV1>("BentoBoxV1", Constants.optimism.limone);

@@ -11,7 +11,6 @@ changes:
     - remove SafeMathUniswap library and replace all usage of it with basic operations
     - change casting from uint to bytes20 in pair address calculation and shift by 96 bits before casting
  */
-
 library UniswapV2Library {
     // returns sorted token addresses, used to handle return values from pairs sorted in this order
     function sortTokens(address tokenA, address tokenB) internal pure returns (address token0, address token1) {

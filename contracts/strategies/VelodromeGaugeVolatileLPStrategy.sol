@@ -2,10 +2,10 @@
 
 pragma solidity 0.8.7;
 
-import "@rari-capital/solmate/src/tokens/ERC20.sol";
-import "@rari-capital/solmate/src/utils/SafeTransferLib.sol";
+import "solmate/src/tokens/ERC20.sol";
+import "solmate/src/utils/SafeTransferLib.sol";
 
-import "../BaseStrategy.sol";
+import "../MinimalBaseStrategy.sol";
 import "../interfaces/ISushiSwap.sol";
 import "../interfaces/velodrome/IVelodromeRouter.sol";
 import "../interfaces/velodrome/IVelodromeGauge.sol";
@@ -19,7 +19,18 @@ interface IRewardSwapper {
     ) external returns (uint256 lpAmount);
 }
 
-contract VelodromeGaugeLPStrategy is BaseStrategy {
+interface IPair {
+    function getAmountOut(uint256, address) external view returns (uint256);
+
+    function swap(
+        uint256 amount0Out,
+        uint256 amount1Out,
+        address to,
+        bytes calldata data
+    ) external;
+}
+
+contract VelodromeGaugeVolatileLPStrategy is MinimalBaseStrategy {
     using SafeTransferLib for ERC20;
 
     error InsufficientAmountOut();
@@ -34,9 +45,9 @@ contract VelodromeGaugeLPStrategy is BaseStrategy {
     bytes32 internal constant PAIR_CODE_HASH = 0xc1ac28b1c4ebe53c0cff67bab5878c4eb68759bb1e9f73977cd266b247d149f0;
     IVelodromeRouter internal constant ROUTER = IVelodromeRouter(0xa132DAB612dB5cB9fC9Ac426A0Cc215A3423F9c9);
     address public constant VELO = 0x3c8B650257cFb5f272f799F5e2b4e65093a11a05;
+    address public constant FACTORY = 0x25CbdDb98b35ab1FF77413456B31EC81A6B6B746;
 
     IVelodromeGauge public immutable gauge;
-    bool public immutable stable;
 
     address public immutable rewardToken;
     address public immutable pairInputToken;
@@ -60,10 +71,8 @@ contract VelodromeGaugeLPStrategy is BaseStrategy {
 
     /** @param _strategyToken Address of the underlying LP token the strategy invests.
         @param _bentoBox BentoBox address.
-        @param _factory SushiSwap factory.
         @param _strategyExecutor an EOA that will execute the safeHarvest function.
         @param _gauge The velodrome gauge farm
-        @param _stable Stable or Volatile Pool
         @param _rewardToken The gauge reward token
         @param _usePairToken0 When true, the _rewardToken will be swapped to the pair's token0 for one-sided liquidity
                                 providing, otherwise, the pair's token1.
@@ -71,17 +80,14 @@ contract VelodromeGaugeLPStrategy is BaseStrategy {
     constructor(
         address _strategyToken,
         address _bentoBox,
-        address _factory,
         address _strategyExecutor,
         IVelodromeGauge _gauge,
-        bool _stable,
         address _rewardToken,
         bool _usePairToken0
-    ) BaseStrategy(_strategyToken, _bentoBox, _factory, address(0), _strategyExecutor, PAIR_CODE_HASH) {
+    ) MinimalBaseStrategy(_strategyToken, _bentoBox, _strategyExecutor) {
         gauge = _gauge;
         rewardToken = _rewardToken;
         feeCollector = _msgSender();
-        stable = _stable;
 
         (address token0, address token1) = _getPairTokens(_strategyToken);
         ERC20(token0).safeApprove(address(ROUTER), type(uint256).max);
@@ -117,24 +123,19 @@ contract VelodromeGaugeLPStrategy is BaseStrategy {
         token1 = sushiPair.token1();
     }
 
-    function _swapTokens(address tokenIn, address tokenOut) private returns (uint256 amountOut) {
-        bool useBridge = bridgeToken != address(0);
-        address[] memory path = new address[](useBridge ? 3 : 2);
+    function _swapRewards() private returns (uint256 amountOut) {
+        IPair pair = IPair(ROUTER.pairFor(rewardToken, pairInputToken, false));
+        (address token0, ) = _getPairTokens(pair);
+        uint256 amountIn = ERC20(rewardToken).balanceOf(address(this));
 
-        path[0] = tokenIn;
+        amountOut = pair.getAmountOut(amountIn, rewardToken);
+        ERC20(rewardToken).safeTransfer(pair, amountIn);
 
-        if (useBridge) {
-            path[1] = bridgeToken;
+        if (token0 == rewardToken) {
+            pair.swap(0, amountOut, address(this), "");
+        } else {
+            pair.swap(amountOut, 0, address(this), "");
         }
-
-        path[path.length - 1] = tokenOut;
-
-        uint256 amountIn = ERC20(path[0]).balanceOf(address(this));
-        uint256[] memory amounts = UniswapV2Library.getAmountsOut(factory, amountIn, path, pairCodeHash);
-        amountOut = amounts[amounts.length - 1];
-
-        ERC20(path[0]).safeTransfer(UniswapV2Library.pairFor(factory, path[0], path[1], pairCodeHash), amounts[0]);
-        _swap(amounts, path, address(this));
     }
 
     function _calculateSwapInAmount(uint256 reserveIn, uint256 userIn) internal pure returns (uint256) {
@@ -143,7 +144,7 @@ contract VelodromeGaugeLPStrategy is BaseStrategy {
 
     /// @notice Swap some tokens in the contract for the underlying and deposits them to address(this)
     function swapToLP(uint256 amountOutMin) public onlyExecutor returns (uint256 amountOut) {
-        uint256 tokenInAmount = _swapTokens(rewardToken, pairInputToken);
+        uint256 tokenInAmount = _swapRewards(rewardToken, pairInputToken);
         (uint256 reserve0, uint256 reserve1, ) = ISushiSwap(strategyToken).getReserves();
         (address token0, address token1) = _getPairTokens(strategyToken);
 
@@ -159,7 +160,7 @@ contract VelodromeGaugeLPStrategy is BaseStrategy {
             path[1] = token0;
         }
 
-        uint256[] memory amounts = UniswapV2Library.getAmountsOut(factory, swapAmountIn, path, pairCodeHash);
+        uint256[] memory amounts = UniswapV2Library.getAmountsOut(FACTORY, swapAmountIn, path, PAIR_CODE_HASH);
         ERC20(path[0]).safeTransfer(strategyToken, amounts[0]);
         _swap(amounts, path, address(this));
 
@@ -200,7 +201,7 @@ contract VelodromeGaugeLPStrategy is BaseStrategy {
     /// Only custom swpper executors are allowed to call this function as an extra layer
     /// of security because it could be used to transfer funds away.
     function swapToLPUsingCustomSwapper(
-        IERC20 token,
+        ERC20 token,
         uint256 amountOutMin,
         IRewardSwapper swapper
     ) public onlyCustomSwapperExecutors returns (uint256 amountOut) {
