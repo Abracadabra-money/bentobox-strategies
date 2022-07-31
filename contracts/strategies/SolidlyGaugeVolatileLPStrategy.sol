@@ -138,6 +138,7 @@ contract SolidlyGaugeVolatileLPStrategy is MinimalBaseStrategy {
         uint256 amountIn,
         uint256 fee
     ) internal pure returns (uint256) {
+        /// @dev rought estimation to account for the fact that fees don't stay inside the pool.
         amountIn += ((amountIn * fee) / 10000) / 2;
 
         return (Babylonian.sqrt(4000000 * (reserveIn * reserveIn) + (4000000 * amountIn * reserveIn)) - 2000 * reserveIn) / 2000;
