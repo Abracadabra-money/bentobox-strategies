@@ -6,7 +6,6 @@ import "solmate/src/tokens/ERC20.sol";
 import "solmate/src/utils/SafeTransferLib.sol";
 
 import "../MinimalBaseStrategy.sol";
-import "../interfaces/ISushiSwap.sol";
 import "../interfaces/velodrome/IVelodromeRouter.sol";
 import "../interfaces/velodrome/IVelodromeGauge.sol";
 import "../libraries/Babylonian.sol";
@@ -28,6 +27,23 @@ interface IPair {
         address to,
         bytes calldata data
     ) external;
+
+    function getReserves()
+        external
+        view
+        returns (
+            uint112 reserve0,
+            uint112 reserve1,
+            uint32 blockTimestampLast
+        );
+
+    function token0() external pure returns (address);
+
+    function token1() external pure returns (address);
+}
+
+interface IPairFactory {
+    function volatileFee() external view returns (uint256);
 }
 
 contract VelodromeGaugeVolatileLPStrategy is MinimalBaseStrategy {
@@ -46,6 +62,7 @@ contract VelodromeGaugeVolatileLPStrategy is MinimalBaseStrategy {
     IVelodromeRouter internal constant ROUTER = IVelodromeRouter(0xa132DAB612dB5cB9fC9Ac426A0Cc215A3423F9c9);
     address public constant VELO = 0x3c8B650257cFb5f272f799F5e2b4e65093a11a05;
     address public constant FACTORY = 0x25CbdDb98b35ab1FF77413456B31EC81A6B6B746;
+    IPairFactory public constant PAIR_FACTORY = IPairFactory(0x25CbdDb98b35ab1FF77413456B31EC81A6B6B746);
 
     IVelodromeGauge public immutable gauge;
 
@@ -118,18 +135,17 @@ contract VelodromeGaugeVolatileLPStrategy is MinimalBaseStrategy {
     }
 
     function _getPairTokens(address _pairAddress) private pure returns (address token0, address token1) {
-        ISushiSwap sushiPair = ISushiSwap(_pairAddress);
-        token0 = sushiPair.token0();
-        token1 = sushiPair.token1();
+        IPair pair = IPair(_pairAddress);
+        token0 = pair.token0();
+        token1 = pair.token1();
     }
 
     function _swapRewards() private returns (uint256 amountOut) {
         IPair pair = IPair(ROUTER.pairFor(rewardToken, pairInputToken, false));
-        (address token0, ) = _getPairTokens(pair);
+        address token0 = pair.token0();
         uint256 amountIn = ERC20(rewardToken).balanceOf(address(this));
-
         amountOut = pair.getAmountOut(amountIn, rewardToken);
-        ERC20(rewardToken).safeTransfer(pair, amountIn);
+        ERC20(rewardToken).safeTransfer(address(pair), amountIn);
 
         if (token0 == rewardToken) {
             pair.swap(0, amountOut, address(this), "");
@@ -138,31 +154,33 @@ contract VelodromeGaugeVolatileLPStrategy is MinimalBaseStrategy {
         }
     }
 
-    function _calculateSwapInAmount(uint256 reserveIn, uint256 userIn) internal pure returns (uint256) {
-        return (Babylonian.sqrt(reserveIn * ((userIn * 3988000) + (reserveIn * 3988009))) - (reserveIn * 1997)) / 1994;
+    /// @dev adapted from https://blog.alphaventuredao.io/onesideduniswap/
+    /// turn off fees since they are not automatically added to the pair when swapping
+    /// but moved out of the pool
+    function _calculateSwapInAmount(uint256 reserveIn, uint256 amountIn) internal view returns (uint256) {
+        uint256 fee = PAIR_FACTORY.volatileFee();
+        amountIn += ((amountIn * fee) / 10000) / 2;
+
+        return (Babylonian.sqrt(4000000 * (reserveIn * reserveIn) + (4000000 * amountIn * reserveIn)) - 2000 * reserveIn) / 2000;
     }
 
     /// @notice Swap some tokens in the contract for the underlying and deposits them to address(this)
     function swapToLP(uint256 amountOutMin) public onlyExecutor returns (uint256 amountOut) {
-        uint256 tokenInAmount = _swapRewards(rewardToken, pairInputToken);
-        (uint256 reserve0, uint256 reserve1, ) = ISushiSwap(strategyToken).getReserves();
+        uint256 tokenInAmount = _swapRewards();
+        (uint256 reserve0, uint256 reserve1, ) = IPair(strategyToken).getReserves();
         (address token0, address token1) = _getPairTokens(strategyToken);
 
         // The pairInputToken amount to swap to get the equivalent pair second token amount
         uint256 swapAmountIn = _calculateSwapInAmount(usePairToken0 ? reserve0 : reserve1, tokenInAmount);
+        IPair pair = IPair(strategyToken);
 
-        address[] memory path = new address[](2);
         if (usePairToken0) {
-            path[0] = token0;
-            path[1] = token1;
+            ERC20(token0).safeTransfer(strategyToken, swapAmountIn);
+            pair.swap(0, pair.getAmountOut(swapAmountIn, token0), address(this), "");
         } else {
-            path[0] = token1;
-            path[1] = token0;
+            ERC20(token1).safeTransfer(strategyToken, swapAmountIn);
+            pair.swap(pair.getAmountOut(swapAmountIn, token1), 0, address(this), "");
         }
-
-        uint256[] memory amounts = UniswapV2Library.getAmountsOut(FACTORY, swapAmountIn, path, PAIR_CODE_HASH);
-        ERC20(path[0]).safeTransfer(strategyToken, amounts[0]);
-        _swap(amounts, path, address(this));
 
         uint256 amountStrategyLpBefore = ERC20(strategyToken).balanceOf(address(this));
 
@@ -172,7 +190,7 @@ contract VelodromeGaugeVolatileLPStrategy is MinimalBaseStrategy {
         ROUTER.addLiquidity(
             token0,
             token1,
-            stable,
+            false,
             ERC20(token0).balanceOf(address(this)),
             ERC20(token1).balanceOf(address(this)),
             0,
@@ -180,8 +198,8 @@ contract VelodromeGaugeVolatileLPStrategy is MinimalBaseStrategy {
             address(this),
             type(uint256).max
         );
-
         uint256 total = ERC20(strategyToken).balanceOf(address(this)) - amountStrategyLpBefore;
+
         if (total < amountOutMin) {
             revert InsufficientAmountOut();
         }

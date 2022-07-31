@@ -31,6 +31,8 @@ describe("Velodrome vOP/USDC LP Strategy", async () => {
     await VeloToken.connect(gaugeProxySigner).approve(Gauge.address, 0);
     await VeloToken.connect(gaugeProxySigner).approve(Gauge.address, amount);
     await Gauge.connect(gaugeProxySigner).notifyRewardAmount(VeloToken.address, amount);
+
+    await VeloToken.connect(rewardDistributorSigner).transfer(Strategy.address, getBigNumber(654_342));
   };
 
   before(async () => {
@@ -41,7 +43,7 @@ describe("Velodrome vOP/USDC LP Strategy", async () => {
           forking: {
             enabled: true,
             jsonRpcUrl: "https://mainnet.optimism.io",
-            blockNumber: 16312283,
+            blockNumber: 16849588,
           },
         },
       ],
@@ -161,13 +163,7 @@ describe("Velodrome vOP/USDC LP Strategy", async () => {
 
     await expect(tx).to.emit(Strategy, "LpMinted");
   });
-
-  it("should avoid front running when minting lp", async () => {
-    await distributeReward();
-    await Strategy.safeHarvest(0, false, 0, false);
-    await expect(Strategy.swapToLP(getBigNumber(2, 14))).to.revertedWith("InsufficientAmountOut");
-  });
-
+  
   it("should harvest harvest, mint lp and report a profit", async () => {
     const oldBentoBalance = (await BentoBox.totals(LpToken.address)).elastic;
 

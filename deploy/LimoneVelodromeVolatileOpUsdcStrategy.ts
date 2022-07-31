@@ -25,7 +25,6 @@ const deployFunction: DeployFunction = async function (
       Constants.optimism.limone,
       executor,
       Constants.optimism.velodrome.vOpUsdcGauge,
-      false, // Volatile Pool
       Constants.optimism.velodrome.velo,
       usePairToken0
     ],
