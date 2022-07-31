@@ -1,12 +1,21 @@
 /* eslint-disable prefer-const */
 import { ethers, network, deployments, getNamedAccounts } from "hardhat";
 import { expect } from "chai";
-import { BentoBoxV1, ERC20Mock, IERC20, ISolidlyGauge, ISolidlyRouter, IVelodromePairFactory, SolidlyGaugeVolatileLPStrategy } from "../typechain";
+import {
+  BentoBoxV1,
+  ERC20Mock,
+  IERC20,
+  ISolidlyGauge,
+  ISolidlyRouter,
+  IVelodromePairFactory,
+  SolidlyGaugeVolatileLPStrategy,
+} from "../typechain";
 import { advanceTime, getBigNumber, impersonate } from "../utilities";
 import { Constants } from "./constants";
 
 const opWhale = "0x2501c477D0A35545a387Aa4A3EEe4292A9a8B3F0";
 const usdcWhale = "0xAD7b4C162707E0B2b5f6fdDbD3f8538A5fbA0d60";
+const rewardDistributor = "0x5d5Bea9f0Fc13d967511668a60a3369fD53F784F";
 
 describe("Velodrome vOP/USDC LP Strategy", async () => {
   let snapshotId;
@@ -22,19 +31,16 @@ describe("Velodrome vOP/USDC LP Strategy", async () => {
   let aliceSigner;
   let gaugeProxySigner;
   let fee;
+  let rewardDistributorSigner;
 
-  const distributeReward = async (amount = getBigNumber(50_000)) => {
+  const distributeReward = async () => {
     await advanceTime(1210000);
-    const rewardDistributor = "0x5d5Bea9f0Fc13d967511668a60a3369fD53F784F";
-    await impersonate(rewardDistributor);
-    const rewardDistributorSigner = await ethers.getSigner(rewardDistributor);
-    
+    const amount = getBigNumber(50_000);
+
     await VeloToken.connect(rewardDistributorSigner).transfer(gaugeProxySigner.address, amount);
     await VeloToken.connect(gaugeProxySigner).approve(Gauge.address, 0);
     await VeloToken.connect(gaugeProxySigner).approve(Gauge.address, amount);
     await Gauge.connect(gaugeProxySigner).notifyRewardAmount(VeloToken.address, amount);
-
-    await VeloToken.connect(rewardDistributorSigner).transfer(Strategy.address, getBigNumber(654_342));
   };
 
   before(async () => {
@@ -55,6 +61,8 @@ describe("Velodrome vOP/USDC LP Strategy", async () => {
     const { deployer, alice } = await getNamedAccounts();
 
     await impersonate(Constants.optimism.velodrome.vOpUsdcGauge);
+    await impersonate(rewardDistributor);
+    rewardDistributorSigner = await ethers.getSigner(rewardDistributor);
 
     deployerSigner = await ethers.getSigner(deployer);
     aliceSigner = await ethers.getSigner(alice);
@@ -145,7 +153,7 @@ describe("Velodrome vOP/USDC LP Strategy", async () => {
     expect(await Strategy.feeCollector()).to.eq(alice.address);
   });
 
-  it("should mint lp from rewards and take 10%", async () => {
+  it.only("should mint lp from rewards and take 10%", async () => {
     const { deployer } = await getNamedAccounts();
     await Strategy.setFeeParameters(deployer, 10);
 
@@ -155,7 +163,9 @@ describe("Velodrome vOP/USDC LP Strategy", async () => {
     const feeCollector = await Strategy.feeCollector();
     const balanceFeeCollectorBefore = await LpToken.balanceOf(feeCollector);
     const balanceBefore = await LpToken.balanceOf(Strategy.address);
-    const tx = await Strategy.swapToLP(0, fee);
+
+    await VeloToken.connect(rewardDistributorSigner).transfer(Strategy.address, getBigNumber(4_000_000));
+    const tx = await Strategy.swapToLP(0, 2);
     const balanceAfter = await LpToken.balanceOf(Strategy.address);
     const balanceFeeCollectorAfter = await LpToken.balanceOf(feeCollector);
 
@@ -167,12 +177,14 @@ describe("Velodrome vOP/USDC LP Strategy", async () => {
 
     await expect(tx).to.emit(Strategy, "LpMinted");
   });
-  
+
   it("should harvest harvest, mint lp and report a profit", async () => {
     const oldBentoBalance = (await BentoBox.totals(LpToken.address)).elastic;
 
     await distributeReward();
     await Strategy.safeHarvest(0, false, 0, false); // harvest spirit
+
+    await VeloToken.connect(rewardDistributorSigner).transfer(Strategy.address, getBigNumber(4_000_000));
     await Strategy.swapToLP(0, fee); // mint new ftm/mimlp from harvest spirit
 
     // harvest spirit, report lp profit to bentobox
@@ -195,6 +207,8 @@ describe("Velodrome vOP/USDC LP Strategy", async () => {
 
     await distributeReward();
     await Strategy.safeHarvest(0, false, 0, false); // harvest spirit
+
+    await VeloToken.connect(rewardDistributorSigner).transfer(Strategy.address, getBigNumber(4_000_000));
     await Strategy.swapToLP(0, fee); // mint lp from harvested rewards
 
     await expect(BentoBox.setStrategy(LpToken.address, Strategy.address)).to.emit(BentoBox, "LogStrategyQueued");
