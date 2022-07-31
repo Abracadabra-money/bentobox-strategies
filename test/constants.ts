@@ -129,6 +129,8 @@ export const Constants = {
     cauldronV31_DegenBox: "0xAcdd6e28b7440fe17EeFD927337480DD1Ea7A97b",
     cauldronV31_Limone: "0xc7a161Cfd0e133d289B13692b636B8e8B5CD8d8c",
     velodrome: {
+      initHash: "0xc1ac28b1c4ebe53c0cff67bab5878c4eb68759bb1e9f73977cd266b247d149f0",
+      pairFactory: "0x25CbdDb98b35ab1FF77413456B31EC81A6B6B746",
       velo: "0x3c8B650257cFb5f272f799F5e2b4e65093a11a05",
       router: "0xa132DAB612dB5cB9fC9Ac426A0Cc215A3423F9c9",
       factory: "0x25CbdDb98b35ab1FF77413456B31EC81A6B6B746",

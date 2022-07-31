@@ -1,7 +1,7 @@
 /* eslint-disable prefer-const */
 import { ethers, network, deployments, getNamedAccounts } from "hardhat";
 import { expect } from "chai";
-import { BentoBoxV1, ERC20Mock, IERC20, IVelodromeGauge, IVelodromeRouter, VelodromeGaugeVolatileLPStrategy } from "../typechain";
+import { BentoBoxV1, ERC20Mock, IERC20, ISolidlyGauge, ISolidlyRouter, IVelodromePairFactory, SolidlyGaugeVolatileLPStrategy } from "../typechain";
 import { advanceTime, getBigNumber, impersonate } from "../utilities";
 import { Constants } from "./constants";
 
@@ -10,16 +10,18 @@ const usdcWhale = "0xAD7b4C162707E0B2b5f6fdDbD3f8538A5fbA0d60";
 
 describe("Velodrome vOP/USDC LP Strategy", async () => {
   let snapshotId;
-  let Strategy: VelodromeGaugeVolatileLPStrategy;
+  let Strategy: SolidlyGaugeVolatileLPStrategy;
   let BentoBox: BentoBoxV1;
   let LpToken: IERC20;
   let VeloToken: ERC20Mock;
   let OpToken: ERC20Mock;
   let UsdcToken: ERC20Mock;
-  let Gauge: IVelodromeGauge;
+  let Gauge: ISolidlyGauge;
+  let PairFactory: IVelodromePairFactory;
   let deployerSigner;
   let aliceSigner;
   let gaugeProxySigner;
+  let fee;
 
   const distributeReward = async (amount = getBigNumber(50_000)) => {
     await advanceTime(1210000);
@@ -60,13 +62,15 @@ describe("Velodrome vOP/USDC LP Strategy", async () => {
 
     Strategy = await ethers.getContract("LimoneVelodromeVolatileOpUsdcStrategy");
     BentoBox = await ethers.getContractAt<BentoBoxV1>("BentoBoxV1", Constants.optimism.limone);
-    Gauge = await ethers.getContractAt<IVelodromeGauge>("IVelodromeGauge", Constants.optimism.velodrome.vOpUsdcGauge);
+    Gauge = await ethers.getContractAt<ISolidlyGauge>("ISolidlyGauge", Constants.optimism.velodrome.vOpUsdcGauge);
     LpToken = await ethers.getContractAt<IERC20>("ERC20Mock", Constants.optimism.velodrome.vOpUsdc);
     VeloToken = await ethers.getContractAt<ERC20Mock>("ERC20Mock", Constants.optimism.velodrome.velo);
     OpToken = await ethers.getContractAt<ERC20Mock>("ERC20Mock", Constants.optimism.op);
     UsdcToken = await ethers.getContractAt<ERC20Mock>("ERC20Mock", Constants.optimism.usdc);
+    PairFactory = await ethers.getContractAt<IVelodromePairFactory>("IVelodromePairFactory", Constants.optimism.velodrome.pairFactory);
 
-    const VelodromeRouter = await ethers.getContractAt<IVelodromeRouter>("IVelodromeRouter", Constants.optimism.velodrome.router);
+    fee = await PairFactory.volatileFee();
+    const VelodromeRouter = await ethers.getContractAt<ISolidlyRouter>("ISolidlyRouter", Constants.optimism.velodrome.router);
 
     const degenBoxOwner = await BentoBox.owner();
     await impersonate(degenBoxOwner);
@@ -151,7 +155,7 @@ describe("Velodrome vOP/USDC LP Strategy", async () => {
     const feeCollector = await Strategy.feeCollector();
     const balanceFeeCollectorBefore = await LpToken.balanceOf(feeCollector);
     const balanceBefore = await LpToken.balanceOf(Strategy.address);
-    const tx = await Strategy.swapToLP(0);
+    const tx = await Strategy.swapToLP(0, fee);
     const balanceAfter = await LpToken.balanceOf(Strategy.address);
     const balanceFeeCollectorAfter = await LpToken.balanceOf(feeCollector);
 
@@ -169,7 +173,7 @@ describe("Velodrome vOP/USDC LP Strategy", async () => {
 
     await distributeReward();
     await Strategy.safeHarvest(0, false, 0, false); // harvest spirit
-    await Strategy.swapToLP(0); // mint new ftm/mimlp from harvest spirit
+    await Strategy.swapToLP(0, fee); // mint new ftm/mimlp from harvest spirit
 
     // harvest spirit, report lp profit to bentobox
     await expect(Strategy.safeHarvest(0, false, 0, false)).to.emit(BentoBox, "LogStrategyProfit");
@@ -191,7 +195,7 @@ describe("Velodrome vOP/USDC LP Strategy", async () => {
 
     await distributeReward();
     await Strategy.safeHarvest(0, false, 0, false); // harvest spirit
-    await Strategy.swapToLP(0); // mint lp from harvested rewards
+    await Strategy.swapToLP(0, fee); // mint lp from harvested rewards
 
     await expect(BentoBox.setStrategy(LpToken.address, Strategy.address)).to.emit(BentoBox, "LogStrategyQueued");
     await advanceTime(1210000);

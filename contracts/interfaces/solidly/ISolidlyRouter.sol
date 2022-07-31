@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 pragma solidity >=0.6.2;
 
-interface IVelodromeRouter {
-    struct Route {
+interface ISolidlyRouter {
+    // solhint-disable-next-line contract-name-camelcase
+    struct route {
         address from;
         address to;
         bool stable;
@@ -26,7 +27,7 @@ interface IVelodromeRouter {
             uint256 liquidity
         );
 
-    function getAmountsOut(uint256 amountIn, Route[] memory routes) external view returns (uint256[] memory amounts);
+    function getAmountsOut(uint256 amountIn, route[] memory routes) external view returns (uint256[] memory amounts);
 
     function pairFor(
         address tokenA,

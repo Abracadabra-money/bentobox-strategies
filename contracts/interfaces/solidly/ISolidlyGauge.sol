@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: MIT
+pragma solidity >= 0.6.2;
 
-pragma solidity 0.8.7;
-
-interface IVelodromeGauge {
+interface ISolidlyGauge {
     function depositAll(uint256 tokenId) external;
 
     function deposit(uint256 amount, uint256 tokenId) external;

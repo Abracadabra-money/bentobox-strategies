@@ -3,7 +3,7 @@ import { DeployFunction } from "hardhat-deploy/types";
 import { network } from "hardhat";
 import { Constants, xMerlin } from "../test/constants";
 import { ChainId, setDeploymentSupportedChains, wrappedDeploy } from "../utilities";
-import { VelodromeGaugeVolatileLPStrategy } from "../typechain";
+import { SolidlyGaugeVolatileLPStrategy } from "../typechain";
 
 export const ParametersPerChain = {
   [ChainId.Optimism]: {},
@@ -18,19 +18,21 @@ const deployFunction: DeployFunction = async function (
   const executor = deployer;
   const usePairToken0 = false; // Swap Velo rewards to USDC to provide vOP/USDC liquidity
 
-  const Strategy = await wrappedDeploy<VelodromeGaugeVolatileLPStrategy>("LimoneVelodromeVolatileOpUsdcStrategy", {
+  const Strategy = await wrappedDeploy<SolidlyGaugeVolatileLPStrategy>("LimoneVelodromeVolatileOpUsdcStrategy", {
     from: deployer,
     args: [
       Constants.optimism.velodrome.vOpUsdc,
       Constants.optimism.limone,
       executor,
+      Constants.optimism.velodrome.router,
       Constants.optimism.velodrome.vOpUsdcGauge,
       Constants.optimism.velodrome.velo,
+      Constants.optimism.velodrome.initHash,
       usePairToken0
     ],
     log: true,
     deterministicDeployment: false,
-    contract: "VelodromeGaugeVolatileLPStrategy"
+    contract: "SolidlyGaugeVolatileLPStrategy"
   })
 
   if (network.name !== "hardhat") {
