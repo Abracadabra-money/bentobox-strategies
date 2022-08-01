@@ -8,8 +8,8 @@ import "solmate/src/utils/SafeTransferLib.sol";
 import "../MinimalBaseStrategy.sol";
 import "../interfaces/solidly/ISolidlyRouter.sol";
 import "../interfaces/solidly/ISolidlyGauge.sol";
+import "../interfaces/solidly/ISolidlyPair.sol";
 import "../libraries/Babylonian.sol";
-import "../interfaces/IUniswapV2Pair.sol";
 
 interface IRewardSwapper {
     function swap(
@@ -111,13 +111,13 @@ contract SolidlyGaugeVolatileLPStrategy is MinimalBaseStrategy {
     }
 
     function _getPairTokens(address _pairAddress) private pure returns (address token0, address token1) {
-        IUniswapV2Pair pair = IUniswapV2Pair(_pairAddress);
+        ISolidlyPair pair = ISolidlyPair(_pairAddress);
         token0 = pair.token0();
         token1 = pair.token1();
     }
 
     function _swapRewards() private returns (uint256 amountOut) {
-        IUniswapV2Pair pair = IUniswapV2Pair(router.pairFor(rewardToken, pairInputToken, false));
+        ISolidlyPair pair = ISolidlyPair(router.pairFor(rewardToken, pairInputToken, false));
         address token0 = pair.token0();
         uint256 amountIn = ERC20(rewardToken).balanceOf(address(this));
         amountOut = pair.getAmountOut(amountIn, rewardToken);
@@ -149,12 +149,12 @@ contract SolidlyGaugeVolatileLPStrategy is MinimalBaseStrategy {
     /// For example, on Velodrome, use PairFactory's `volatileFee()` to get the current volatile fee.
     function swapToLP(uint256 amountOutMin, uint256 fee) public onlyExecutor returns (uint256 amountOut) {
         uint256 tokenInAmount = _swapRewards();
-        (uint256 reserve0, uint256 reserve1, ) = IUniswapV2Pair(strategyToken).getReserves();
+        (uint256 reserve0, uint256 reserve1, ) = ISolidlyPair(strategyToken).getReserves();
         (address token0, address token1) = _getPairTokens(strategyToken);
 
         // The pairInputToken amount to swap to get the equivalent pair second token amount
         uint256 swapAmountIn = _calculateSwapInAmount(usePairToken0 ? reserve0 : reserve1, tokenInAmount, fee);
-        IUniswapV2Pair pair = IUniswapV2Pair(strategyToken);
+        ISolidlyPair pair = ISolidlyPair(strategyToken);
 
         if (usePairToken0) {
             ERC20(token0).safeTransfer(strategyToken, swapAmountIn);
