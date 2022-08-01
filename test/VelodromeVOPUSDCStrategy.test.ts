@@ -153,7 +153,7 @@ describe("Velodrome vOP/USDC LP Strategy", async () => {
     expect(await Strategy.feeCollector()).to.eq(alice.address);
   });
 
-  it.only("should mint lp from rewards and take 10%", async () => {
+  it("should mint lp from rewards and take 10%", async () => {
     const { deployer } = await getNamedAccounts();
     await Strategy.setFeeParameters(deployer, 10);
 
